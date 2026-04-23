@@ -6,7 +6,7 @@ This document tracks all versions of the Fun Ed reading comprehension applicatio
 
 ## v1.4 - Personalization Update
 **Date:** April 23, 2026
-**Git Commit:** TBD
+**Git Commit:** fc6fddc
 
 ### Changes:
 - **Onboarding Personalization:**
