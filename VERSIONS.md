@@ -4,6 +4,34 @@ This document tracks all versions of the Fun Ed reading comprehension applicatio
 
 ---
 
+## v1.5 - English Dictionary/Vocabulary Feature
+**Date:** April 23, 2026
+**Git Commit:** TBD
+
+### Changes:
+- **Vocabulary Definitions:**
+  - AI now identifies 3-5 challenging vocabulary words from each passage
+  - Words selected are appropriate for 6th grade level
+  - Student-friendly definitions provided for each word
+  - Applied to ALL question types (FunEd, STAR Reading, Star Renaissance)
+- **UI Enhancement:**
+  - Added "📖 Vocabulary" expandable section below each passage
+  - Collapsible expander (starts closed to not distract from question)
+  - Clear word + definition format: "**word:** definition"
+- **JSON Output Updated:**
+  - Added "vocabulary" array to JSON format
+  - Each entry contains "word" and "definition" fields
+  - AI instructed to choose important, grade-appropriate academic terms
+
+### Why:
+- Build vocabulary while reading
+- Help students understand challenging words in context
+- Support comprehension by clarifying unfamiliar terms
+- Teach academic vocabulary naturally through exposure
+- Optional (expandable) so doesn't interfere with question flow
+
+---
+
 ## v1.4 - Personalization Update
 **Date:** April 23, 2026
 **Git Commit:** fc6fddc
@@ -149,5 +177,5 @@ Before each version update:
 
 ---
 
-**Current Version:** v1.4
+**Current Version:** v1.5
 **Last Updated:** April 23, 2026

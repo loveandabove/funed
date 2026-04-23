@@ -6,7 +6,7 @@ import time
 import json
 
 # --- VERSION ---
-VERSION = "1.5"  # April 23, 2026 - English dictionary/vocabulary definitions for words
+VERSION = "1.4"  # April 23, 2026 - Personalization with student name and pronouns
 
 # --- API KEY ---
 
@@ -335,14 +335,6 @@ GOOD WRONG ANSWERS:
 ✓ Type 2 (vocabulary misuse): "...became skilled at balancing his interests with team commitments"
 ✓ Type 3 (partial truth): "...enjoys spending time with his friends during practice"
 
-**Vocabulary Requirements:**
-- Identify 3-5 challenging vocabulary words from the passage
-- Choose words that are:
-  * Important for understanding the passage
-  * Appropriate for 6th grade level (not too easy, not too hard)
-  * Academic or literary terms that students should learn
-- Provide student-friendly definitions (clear, concise, age-appropriate)
-
 **Output Format:**
 Respond ONLY in this exact JSON format, no markdown, no extra text:
 {{
@@ -352,18 +344,13 @@ Respond ONLY in this exact JSON format, no markdown, no extra text:
   "answer": "{correct_answer}",
   "explanation": "...",
   "skill": "{skill}",
-  "topic": "brief 2-4 word description of passage topic (e.g., 'soccer tournament', 'minecraft adventure', 'chess competition')",
-  "vocabulary": [
-    {{"word": "hesitated", "definition": "paused before doing something because of nervousness or uncertainty"}},
-    {{"word": "confident", "definition": "feeling sure about your abilities or that something will happen"}}
-  ]
+  "topic": "brief 2-4 word description of passage topic (e.g., 'soccer tournament', 'minecraft adventure', 'chess competition')"
 }}
 
 IMPORTANT:
 1. Make sure the correct answer is in choice {correct_answer}. The "answer" field in JSON must be "{correct_answer}".
 2. Include a "topic" field with a brief description of the passage topic.
-3. Include a "vocabulary" array with 3-5 words and their student-friendly definitions.
-4. Passage must require inference - no single sentence should contain the full answer."""
+3. Passage must require inference - no single sentence should contain the full answer."""
 
     # Standard prompt for STAR Reading and Star Renaissance
     return f"""You are generating a Florida B.E.S.T. Standards-aligned reading comprehension question for a 6th grade student.
@@ -423,14 +410,6 @@ BAD WRONG ANSWERS (too obvious or silly):
 ✗ "There is no pool in the passage" (obviously false)
 ✗ "Maya is afraid of water forever" (extreme, unsupported)
 
-**Vocabulary Requirements:**
-- Identify 3-5 challenging vocabulary words from the passage
-- Choose words that are:
-  * Important for understanding the passage
-  * Appropriate for 6th grade level (not too easy, not too hard)
-  * Academic or literary terms that students should learn
-- Provide student-friendly definitions (clear, concise, age-appropriate)
-
 **Output Format:**
 Respond ONLY in this exact JSON format, no markdown, no extra text:
 {{
@@ -440,17 +419,12 @@ Respond ONLY in this exact JSON format, no markdown, no extra text:
   "answer": "{correct_answer}",
   "explanation": "...",
   "skill": "{skill}",
-  "topic": "brief 2-4 word description of passage topic (e.g., 'soccer tournament', 'space exploration', 'coral reefs')",
-  "vocabulary": [
-    {{"word": "example_word", "definition": "student-friendly definition here"}},
-    {{"word": "another_word", "definition": "another clear definition"}}
-  ]
+  "topic": "brief 2-4 word description of passage topic (e.g., 'soccer tournament', 'space exploration', 'coral reefs')"
 }}
 
 IMPORTANT:
 1. Make sure the correct answer is in choice {correct_answer}. The "answer" field in JSON must be "{correct_answer}".
-2. Include a "topic" field with a brief description of the main subject/topic of your passage.
-3. Include a "vocabulary" array with 3-5 words and their student-friendly definitions."""
+2. Include a "topic" field with a brief description of the main subject/topic of your passage."""
 
 # --- API CALL ---
 MODELS = ["claude-sonnet-4-6", "claude-opus-4-6", "claude-sonnet-4-5-20250929", "claude-haiku-4-5-20251001"]
@@ -1010,18 +984,6 @@ with col2:
         st.markdown(f"**{type_icon} {qtype}** - Question {st.session_state.question_count}/10")
         st.write("")
         st.markdown(f"<div class='passage-box'>{q['passage']}</div>", unsafe_allow_html=True)
-
-        # Display vocabulary if available
-        if "vocabulary" in q and q["vocabulary"]:
-            st.write("")
-            with st.expander("📖 Vocabulary", expanded=False):
-                for vocab_item in q["vocabulary"]:
-                    word = vocab_item.get("word", "")
-                    definition = vocab_item.get("definition", "")
-                    if word and definition:
-                        st.markdown(f"**{word}:** {definition}")
-
-        st.write("")
         st.markdown(f"**{q['question']}**")
         st.write("")
 
