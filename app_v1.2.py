@@ -6,7 +6,7 @@ import time
 import json
 
 # --- VERSION ---
-VERSION = "1.3"  # April 20, 2026 - Difficulty-based question type distribution
+VERSION = "1.2"  # April 20, 2026 - Weighted skill system (focus on weakest skill)
 
 # --- API KEY ---
 
@@ -481,28 +481,15 @@ def load_new_question(interest, skill):
         return False
     question_number = st.session_state.question_count + 1
 
-    # Determine question type based on question number AND difficulty level
-    # If difficulty >= 7 (advanced): More FunEd questions (5 out of 10)
-    # If difficulty < 7 (beginner/intermediate): Original pattern (4 FunEd, 3 STAR, 3 Renaissance)
-
-    current_difficulty = st.session_state.difficulty
-
-    if current_difficulty >= 7:
-        # Advanced level: FunEd = 1,3,5,7,9 / STAR = 2,8 / Renaissance = 4,6,10
-        if question_number in [1, 3, 5, 7, 9]:
-            question_type = "FunEd"
-        elif question_number in [2, 8]:
-            question_type = "STAR Reading"
-        else:  # 4, 6, 10
-            question_type = "Star Renaissance"
-    else:
-        # Beginner/Intermediate: Original pattern FunEd = 1,4,7,10 / STAR = 2,5,8 / Renaissance = 3,6,9
-        if question_number in [1, 4, 7, 10]:
-            question_type = "FunEd"
-        elif question_number in [2, 5, 8]:
-            question_type = "STAR Reading"
-        else:  # 3, 6, 9
-            question_type = "Star Renaissance"
+    # Determine question type based on question number
+    # Pattern: FunEd, STAR, Renaissance repeating
+    # 1=FunEd, 2=STAR, 3=Renaissance, 4=FunEd, 5=STAR, 6=Renaissance, 7=FunEd, 8=STAR, 9=Renaissance, 10=FunEd
+    if question_number in [1, 4, 7, 10]:
+        question_type = "FunEd"
+    elif question_number in [2, 5, 8]:
+        question_type = "STAR Reading"
+    else:  # 3, 6, 9
+        question_type = "Star Renaissance"
 
     # Weighted skill system: if focus_skill exists, use it for questions 2, 4, 6, 8
     selected_skill = skill
@@ -740,17 +727,7 @@ with col2:
         st.write("")
 
         # FunEd stats
-        # Determine which questions were FunEd based on difficulty
-        if difficulty >= 7:
-            funed_questions = "1, 3, 5, 7, 9"
-            star_questions = "2, 8"
-            renaissance_questions = "4, 6, 10"
-        else:
-            funed_questions = "1, 4, 7, 10"
-            star_questions = "2, 5, 8"
-            renaissance_questions = "3, 6, 9"
-
-        st.markdown(f"**🎮 FunEd (Questions {funed_questions})**")
+        st.markdown("**🎮 FunEd (Questions 1, 4, 7, 10)**")
         funed_correct = st.session_state.correct_funed
         funed_total = st.session_state.total_funed
         funed_time = st.session_state.time_funed
@@ -765,7 +742,7 @@ with col2:
         st.write("")
 
         # STAR Reading stats
-        st.markdown(f"**📚 STAR Reading (Questions {star_questions})**")
+        st.markdown("**📚 STAR Reading (Questions 2, 5, 8)**")
         star_reading_correct = st.session_state.correct_star_reading
         star_reading_total = st.session_state.total_star_reading
         star_reading_time = st.session_state.time_star_reading
@@ -780,7 +757,7 @@ with col2:
         st.write("")
 
         # Star Renaissance stats
-        st.markdown(f"**🌟 Star Renaissance (Questions {renaissance_questions})**")
+        st.markdown("**🌟 Star Renaissance (Questions 3, 6, 9)**")
         star_renaissance_correct = st.session_state.correct_star_renaissance
         star_renaissance_total = st.session_state.total_star_renaissance
         star_renaissance_time = st.session_state.time_star_renaissance

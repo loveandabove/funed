@@ -5,9 +5,6 @@ from anthropic import Anthropic
 import time
 import json
 
-# --- VERSION ---
-VERSION = "1.3"  # April 20, 2026 - Difficulty-based question type distribution
-
 # --- API KEY ---
 
 def load_dotenv(dotenv_path=".env"):
@@ -170,23 +167,6 @@ if "max_difficulty_funed" not in st.session_state:
 # Track used topics to avoid repetition
 if "used_topics" not in st.session_state:
     st.session_state.used_topics = []
-
-# Skill tracking — correct/total per skill
-SKILL_NAMES = {
-    "ELA.6.R.1.1": "Character Development",
-    "ELA.6.R.1.2": "Central Theme",
-    "ELA.6.R.2.1": "Text Structure",
-    "ELA.6.R.2.4": "Argument & Evidence",
-    "ELA.6.R.3.1": "Figurative Language",
-}
-if "skill_correct" not in st.session_state:
-    st.session_state.skill_correct = {s: 0 for s in SKILL_NAMES}
-if "skill_total" not in st.session_state:
-    st.session_state.skill_total = {s: 0 for s in SKILL_NAMES}
-
-# Focus skill for next session (weakest skill from previous session)
-if "focus_skill" not in st.session_state:
-    st.session_state.focus_skill = None
 
 # --- PROMPT ENGINE ---
 def build_prompt(interest, skill, difficulty, question_number, question_type="Star Renaissance"):
@@ -481,35 +461,17 @@ def load_new_question(interest, skill):
         return False
     question_number = st.session_state.question_count + 1
 
-    # Determine question type based on question number AND difficulty level
-    # If difficulty >= 7 (advanced): More FunEd questions (5 out of 10)
-    # If difficulty < 7 (beginner/intermediate): Original pattern (4 FunEd, 3 STAR, 3 Renaissance)
+    # Determine question type based on question number
+    # Pattern: FunEd, STAR, Renaissance repeating
+    # 1=FunEd, 2=STAR, 3=Renaissance, 4=FunEd, 5=STAR, 6=Renaissance, 7=FunEd, 8=STAR, 9=Renaissance, 10=FunEd
+    if question_number in [1, 4, 7, 10]:
+        question_type = "FunEd"
+    elif question_number in [2, 5, 8]:
+        question_type = "STAR Reading"
+    else:  # 3, 6, 9
+        question_type = "Star Renaissance"
 
-    current_difficulty = st.session_state.difficulty
-
-    if current_difficulty >= 7:
-        # Advanced level: FunEd = 1,3,5,7,9 / STAR = 2,8 / Renaissance = 4,6,10
-        if question_number in [1, 3, 5, 7, 9]:
-            question_type = "FunEd"
-        elif question_number in [2, 8]:
-            question_type = "STAR Reading"
-        else:  # 4, 6, 10
-            question_type = "Star Renaissance"
-    else:
-        # Beginner/Intermediate: Original pattern FunEd = 1,4,7,10 / STAR = 2,5,8 / Renaissance = 3,6,9
-        if question_number in [1, 4, 7, 10]:
-            question_type = "FunEd"
-        elif question_number in [2, 5, 8]:
-            question_type = "STAR Reading"
-        else:  # 3, 6, 9
-            question_type = "Star Renaissance"
-
-    # Weighted skill system: if focus_skill exists, use it for questions 2, 4, 6, 8
-    selected_skill = skill
-    if st.session_state.focus_skill and question_number in [2, 4, 6, 8]:
-        selected_skill = st.session_state.focus_skill
-
-    data = generate_question(interest, selected_skill, st.session_state.difficulty, question_number, question_type)
+    data = generate_question(interest, skill, st.session_state.difficulty, question_number, question_type)
     if data:
         st.session_state.question_data = data
         st.session_state.question_count += 1
@@ -571,9 +533,6 @@ if not st.session_state.started:
             st.session_state.max_difficulty_funed = 5
             # Reset used topics
             st.session_state.used_topics = []
-            # Reset skill tracking
-            st.session_state.skill_correct = {s: 0 for s in SKILL_NAMES}
-            st.session_state.skill_total = {s: 0 for s in SKILL_NAMES}
             with st.spinner("Generating your first question..."):
                 selected_interest = random.choice(st.session_state.interests)
                 selected_skill = SKILLS[st.session_state.skill_index]
@@ -661,9 +620,6 @@ with col1:
             st.session_state.max_difficulty_funed = 5
             # Reset used topics
             st.session_state.used_topics = []
-            # Reset skill tracking
-            st.session_state.skill_correct = {s: 0 for s in SKILL_NAMES}
-            st.session_state.skill_total = {s: 0 for s in SKILL_NAMES}
             st.rerun()
 
 with col2:
@@ -708,49 +664,14 @@ with col2:
         st.write("")
 
         st.markdown("**Rating:** " + "⭐" * stars)
-
-        # Display if this session focused on a specific skill
-        if st.session_state.focus_skill:
-            focus_skill_name = SKILL_NAMES.get(st.session_state.focus_skill, "Unknown")
-            st.info(f"📌 **This session focused on:** {focus_skill_name}")
-
         st.write("---")
-
-        # Calculate weakest skill for next session
-        skill_correct = st.session_state.get("skill_correct", {})
-        skill_total = st.session_state.get("skill_total", {})
-        weakest_skill = None
-        lowest_accuracy = 1.0  # Start at 100%
-
-        for skill_code in SKILL_NAMES:
-            total = skill_total.get(skill_code, 0)
-            correct = skill_correct.get(skill_code, 0)
-            if total > 0:
-                accuracy = correct / total
-                if accuracy < lowest_accuracy:
-                    lowest_accuracy = accuracy
-                    weakest_skill = skill_code
-
-        # Set focus_skill for next session
-        if weakest_skill:
-            st.session_state.focus_skill = weakest_skill
 
         # Detailed stats by question type
         st.markdown("### Results by Question Type")
         st.write("")
 
         # FunEd stats
-        # Determine which questions were FunEd based on difficulty
-        if difficulty >= 7:
-            funed_questions = "1, 3, 5, 7, 9"
-            star_questions = "2, 8"
-            renaissance_questions = "4, 6, 10"
-        else:
-            funed_questions = "1, 4, 7, 10"
-            star_questions = "2, 5, 8"
-            renaissance_questions = "3, 6, 9"
-
-        st.markdown(f"**🎮 FunEd (Questions {funed_questions})**")
+        st.markdown("**🎮 FunEd (Questions 1, 4, 7, 10)**")
         funed_correct = st.session_state.correct_funed
         funed_total = st.session_state.total_funed
         funed_time = st.session_state.time_funed
@@ -765,7 +686,7 @@ with col2:
         st.write("")
 
         # STAR Reading stats
-        st.markdown(f"**📚 STAR Reading (Questions {star_questions})**")
+        st.markdown("**📚 STAR Reading (Questions 2, 5, 8)**")
         star_reading_correct = st.session_state.correct_star_reading
         star_reading_total = st.session_state.total_star_reading
         star_reading_time = st.session_state.time_star_reading
@@ -780,7 +701,7 @@ with col2:
         st.write("")
 
         # Star Renaissance stats
-        st.markdown(f"**🌟 Star Renaissance (Questions {renaissance_questions})**")
+        st.markdown("**🌟 Star Renaissance (Questions 3, 6, 9)**")
         star_renaissance_correct = st.session_state.correct_star_renaissance
         star_renaissance_total = st.session_state.total_star_renaissance
         star_renaissance_time = st.session_state.time_star_renaissance
@@ -857,32 +778,6 @@ with col2:
             else:
                 st.markdown(f"💡 **Insight:** You have a balanced approach - fast at {fastest['icon']} **{fastest['name']}** and accurate at {most_accurate['icon']} **{most_accurate['name']}**!")
 
-        # --- SKILL BREAKDOWN ---
-        st.write("---")
-        st.markdown("### 🎯 Skills Breakdown")
-        skill_correct = st.session_state.get("skill_correct", {})
-        skill_total = st.session_state.get("skill_total", {})
-        skill_results = []
-        for code, name in SKILL_NAMES.items():
-            total = skill_total.get(code, 0)
-            correct = skill_correct.get(code, 0)
-            if total > 0:
-                pct = correct / total
-                skill_results.append((name, correct, total, pct))
-
-        if skill_results:
-            skill_results.sort(key=lambda x: x[3])  # sort weakest first
-            for name, correct, total, pct in skill_results:
-                bar_color = "#e74c3c" if pct < 0.5 else "#f39c12" if pct < 0.75 else "#27ae60"
-                label = "⚠️ Needs Work" if pct < 0.5 else "📈 Getting There" if pct < 0.75 else "✅ Strong"
-                st.markdown(f"**{name}** — {correct}/{total} ({pct*100:.0f}%) {label}")
-                st.progress(pct)
-
-            # Weakest skill callout
-            weakest = skill_results[0]
-            if weakest[3] < 0.75:
-                st.info(f"💪 **Focus Area:** Practice more **{weakest[0]}** questions next session!")
-
         st.write("")
         if st.button("Play Again", use_container_width=True):
             st.session_state.correct = 0
@@ -913,9 +808,6 @@ with col2:
             st.session_state.max_difficulty_funed = 5
             # Reset used topics
             st.session_state.used_topics = []
-            # Reset skill tracking
-            st.session_state.skill_correct = {s: 0 for s in SKILL_NAMES}
-            st.session_state.skill_total = {s: 0 for s in SKILL_NAMES}
             selected_interest = random.choice(st.session_state.interests)
             selected_skill = SKILLS[st.session_state.skill_index]
             if load_new_question(selected_interest, selected_skill):
@@ -971,13 +863,6 @@ with col2:
                         st.session_state.time_funed += elapsed_time
                         if is_correct:
                             st.session_state.correct_funed += 1
-
-                    # Track skill performance
-                    q_skill = q.get("skill", "")
-                    if q_skill in st.session_state.skill_total:
-                        st.session_state.skill_total[q_skill] += 1
-                        if is_correct:
-                            st.session_state.skill_correct[q_skill] += 1
 
                     if is_correct:
                         st.session_state.correct += 1
