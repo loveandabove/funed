@@ -6,7 +6,7 @@ This document tracks all versions of the Fun Ed reading comprehension applicatio
 
 ## v1.5 - English Dictionary/Vocabulary Feature
 **Date:** April 23, 2026
-**Git Commit:** TBD
+**Git Commit:** 0af7f6a
 
 ### Changes:
 - **Vocabulary Definitions:**
