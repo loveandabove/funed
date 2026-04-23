@@ -4,6 +4,34 @@ This document tracks all versions of the Fun Ed reading comprehension applicatio
 
 ---
 
+## v1.4 - Personalization Update
+**Date:** April 23, 2026
+**Git Commit:** TBD
+
+### Changes:
+- **Onboarding Personalization:**
+  - Added "What's your name?" text input field
+  - Added gender selection with "Boy 👦" / "Girl 👧" radio buttons
+  - Determines pronouns automatically (he/him or she/her)
+  - Limited interest selection to maximum 3 with validation warning
+- **Personalized Story Generation:**
+  - All passage protagonists now named after the student
+  - Correct pronouns used throughout all passages (he/him or she/her)
+  - Applied to ALL question types: FunEd, STAR Reading, and Star Renaissance
+- **Report Screen Enhancement:**
+  - Personalized greeting: "Great job, {student_name}!" on completion
+- **Session State Updates:**
+  - Added student_name and pronoun storage
+  - Passed to all prompt generation functions
+
+### Why:
+- Increase engagement through personalized content
+- Students see themselves as the protagonist in every story
+- Gender-affirming language throughout the experience
+- Limit interest selection to prevent decision fatigue and improve story quality
+
+---
+
 ## v1.3 - Difficulty-Based Question Distribution
 **Date:** April 22, 2026
 **Git Commit:** 14bbde2
@@ -121,5 +149,5 @@ Before each version update:
 
 ---
 
-**Current Version:** v1.3
-**Last Updated:** April 22, 2026
+**Current Version:** v1.4
+**Last Updated:** April 23, 2026

@@ -6,7 +6,7 @@ import time
 import json
 
 # --- VERSION ---
-VERSION = "1.4"  # April 23, 2026 - Personalization with student name and pronouns
+VERSION = "1.3"  # April 20, 2026 - Difficulty-based question type distribution
 
 # --- API KEY ---
 
@@ -117,10 +117,6 @@ if "last_result" not in st.session_state:
     st.session_state.last_result = None
 if "interests" not in st.session_state:
     st.session_state.interests = []
-if "student_name" not in st.session_state:
-    st.session_state.student_name = ""
-if "pronoun" not in st.session_state:
-    st.session_state.pronoun = ""
 if "skill_index" not in st.session_state:
     st.session_state.skill_index = 0
 if "question_count" not in st.session_state:
@@ -193,7 +189,7 @@ if "focus_skill" not in st.session_state:
     st.session_state.focus_skill = None
 
 # --- PROMPT ENGINE ---
-def build_prompt(interest, skill, difficulty, question_number, question_type="Star Renaissance", student_name="", pronoun=""):
+def build_prompt(interest, skill, difficulty, question_number, question_type="Star Renaissance"):
     level_desc = DIFFICULTY_MAP[difficulty]
     standard_description = FLORIDA_BEST_STANDARDS[skill]
 
@@ -292,7 +288,6 @@ def build_prompt(interest, skill, difficulty, question_number, question_type="St
 - Reading level: {level_desc}
 - {sentence_complexity}
 - Topic: **{interest}** (Make it engaging, fun, and relevant to this interest){topic_restriction}
-- **IMPORTANT: The protagonist must be named {student_name} and use {pronoun} pronouns throughout the passage.**
 - **Character must face conflicting motivations** (not just one obstacle - internal conflict, tough choices, competing desires)
 - **Answer cannot be found in a single sentence** — requires inference across multiple parts of the passage
 - **No sentence should directly state the theme** — theme should emerge through events and character actions
@@ -363,7 +358,6 @@ IMPORTANT:
 - Reading level: {level_desc}
 - {sentence_complexity}
 - {topic_instruction}{topic_restriction}
-- **IMPORTANT: The protagonist must be named {student_name} and use {pronoun} pronouns throughout the passage.**
 
 **Question Requirements:**
 {skill_guidance}
@@ -462,11 +456,7 @@ def generate_question(interest, skill, difficulty, question_number, question_typ
     if client is None:
         return None
 
-    # Get student name and pronoun from session state
-    student_name = st.session_state.get("student_name", "")
-    pronoun = st.session_state.get("pronoun", "")
-
-    prompt = build_prompt(interest, skill, difficulty, question_number, question_type, student_name, pronoun)
+    prompt = build_prompt(interest, skill, difficulty, question_number, question_type)
     for model_name in MODELS:
         for attempt in range(3):
             try:
@@ -538,19 +528,10 @@ def load_new_question(interest, skill):
 
 if not st.session_state.started:
     st.markdown("# ⭐ FUN ED")
-    st.markdown("*Your adventure-filled learning world*")
+    st.markdown("*Ediz's adventure-filled learning world*")
     st.write("---")
-
+    st.markdown("### What do you like?")
     with st.form("onboarding_form"):
-        st.markdown("### What's your name?")
-        student_name_input = st.text_input("Name", placeholder="Enter your name", label_visibility="collapsed")
-        st.write("")
-
-        st.markdown("### I am a...")
-        gender = st.radio("Gender", ["Boy 👦", "Girl 👧"], label_visibility="collapsed", horizontal=True)
-        st.write("")
-
-        st.markdown("### What do you like? (Choose up to 3)")
         likes = {
             "Minecraft": st.checkbox("Minecraft", key="interest_minecraft"),
             "Soccer": st.checkbox("Soccer", key="interest_soccer"),
@@ -559,33 +540,10 @@ if not st.session_state.started:
             "Animals": st.checkbox("Animals", key="interest_animals"),
             "Gaming": st.checkbox("Gaming", key="interest_gaming"),
         }
-        st.write("")
         start_pressed = st.form_submit_button("Let's Go!", use_container_width=True)
 
     if start_pressed:
         selected = [name for name, value in likes.items() if value]
-
-        # Validation: Check if name is provided
-        if not student_name_input or student_name_input.strip() == "":
-            st.error("Please enter your name!")
-            st.stop()
-
-        # Validation: Check if interests are selected and not more than 3
-        if not selected:
-            st.error("Please select at least one interest!")
-            st.stop()
-        if len(selected) > 3:
-            st.warning("⚠️ Please choose maximum 3 interests!")
-            st.stop()
-
-        # Store student name and pronoun
-        st.session_state.student_name = student_name_input.strip()
-        if gender == "Boy 👦":
-            st.session_state.pronoun = "he/him"
-        else:  # Girl 👧
-            st.session_state.pronoun = "she/her"
-
-        # Store interests
         if selected:
             st.session_state.interests = selected
             st.session_state.skill_index = 0
@@ -740,12 +698,7 @@ with col2:
             grade_level = "8th Grade"
             grade_emoji = "📚"
 
-        # Personalized greeting with student name
-        student_name = st.session_state.get("student_name", "")
-        if student_name:
-            st.markdown(f"### Great job, {student_name}! You completed 10 questions!")
-        else:
-            st.markdown("### Great job! You completed 10 questions!")
+        st.markdown("### Great job! You completed 10 questions!")
         st.markdown(f"**Overall Score: {score} out of 10!**")
         st.write("")
 
