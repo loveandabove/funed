@@ -6,7 +6,7 @@ import time
 import json
 
 # --- VERSION ---
-VERSION = "1.6"  # April 26, 2026 - Replace emoji icons in onboarding form (Windows fix)
+VERSION = "1.5"  # April 23, 2026 - English dictionary/vocabulary definitions for words
 
 # --- API KEY ---
 
@@ -573,7 +573,7 @@ if not st.session_state.started:
         st.write("")
 
         st.markdown("### I am a...")
-        gender = st.radio("Gender", ["Boy", "Girl"], label_visibility="collapsed", horizontal=True)
+        gender = st.radio("Gender", ["Boy 👦", "Girl 👧"], label_visibility="collapsed", horizontal=True)
         st.write("")
 
         st.markdown("### What do you like? (Choose up to 3)")
@@ -606,9 +606,9 @@ if not st.session_state.started:
 
         # Store student name and pronoun
         st.session_state.student_name = student_name_input.strip()
-        if gender == "Boy":
+        if gender == "Boy 👦":
             st.session_state.pronoun = "he/him"
-        else:  # Girl
+        else:  # Girl 👧
             st.session_state.pronoun = "she/her"
 
         # Store interests
