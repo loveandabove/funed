@@ -4,6 +4,7 @@ import streamlit as st
 from anthropic import Anthropic
 import time
 import json
+import traceback
 
 # --- VERSION ---
 VERSION = "1.6"  # April 26, 2026 - Replace emoji icons in onboarding form (Windows fix)
@@ -34,6 +35,8 @@ API_KEY = (
     or st.secrets.get("CLAUDE_API_KEY")
 )
 client = Anthropic(api_key=API_KEY) if API_KEY else None
+print(f"API_KEY found: {bool(API_KEY)}")
+print(f"API_KEY length: {len(API_KEY) if API_KEY else 0}")
 
 # --- CONFIG ---
 INTERESTS = ["Minecraft", "Soccer", "Chess", "Space Travel"]
@@ -513,16 +516,17 @@ def generate_question(interest, skill, difficulty, question_number, question_typ
                     return data
                 print(f"ERROR: JSON parse failed for model={model_name} attempt={attempt+1}, raw={raw[:200]}")
             except json.JSONDecodeError as e:
-                print(f"ERROR: JSONDecodeError model={model_name} attempt={attempt+1}: {e}")
+                print(f"FULL ERROR: {traceback.format_exc()}")
                 return None
             except Exception as e:
-                print(f"ERROR: Exception model={model_name} attempt={attempt+1}: {type(e).__name__}: {e}")
+                print(f"FULL ERROR: {traceback.format_exc()}")
                 time.sleep((attempt + 1) * 2)
     print(f"ERROR: All models and attempts exhausted for question_type={question_type} difficulty={difficulty}")
     return None
 
 
 def load_new_question(interest, skill):
+    import traceback
     if st.session_state.question_count >= 10:
         return False
     question_number = st.session_state.question_count + 1
