@@ -27,7 +27,12 @@ def load_dotenv(dotenv_path=".env"):
                 os.environ[key] = value
 
 load_dotenv()
-API_KEY = os.getenv("ANTHROPIC_API_KEY") or os.getenv("CLAUDE_API_KEY")
+API_KEY = (
+    os.getenv("ANTHROPIC_API_KEY")
+    or os.getenv("CLAUDE_API_KEY")
+    or st.secrets.get("ANTHROPIC_API_KEY")
+    or st.secrets.get("CLAUDE_API_KEY")
+)
 client = Anthropic(api_key=API_KEY) if API_KEY else None
 
 # --- CONFIG ---
