@@ -35,8 +35,10 @@ API_KEY = (
     or st.secrets.get("CLAUDE_API_KEY")
 )
 client = Anthropic(api_key=API_KEY) if API_KEY else None
-print(f"API_KEY found: {bool(API_KEY)}")
-print(f"API_KEY length: {len(API_KEY) if API_KEY else 0}")
+if not API_KEY:
+    st.error("DEBUG: API_KEY is None or empty")
+else:
+    st.success(f"DEBUG: API_KEY found, length={len(API_KEY)}")
 
 # --- CONFIG ---
 INTERESTS = ["Minecraft", "Soccer", "Chess", "Space Travel"]
@@ -494,7 +496,7 @@ def extract_text_from_message(message):
 
 def generate_question(interest, skill, difficulty, question_number, question_type="Star Renaissance"):
     if client is None:
-        print("ERROR: Anthropic client is None — API key missing or not loaded")
+        st.write("ERROR: Anthropic client is None — API key missing or not loaded")
         return None
 
     # Get student name and pronoun from session state
@@ -514,14 +516,14 @@ def generate_question(interest, skill, difficulty, question_number, question_typ
                 data = extract_json_object(raw)
                 if data:
                     return data
-                print(f"ERROR: JSON parse failed for model={model_name} attempt={attempt+1}, raw={raw[:200]}")
+                st.write(f"ERROR: JSON parse failed for model={model_name} attempt={attempt+1}, raw={raw[:200]}")
             except json.JSONDecodeError as e:
-                print(f"FULL ERROR: {traceback.format_exc()}")
+                st.write(f"FULL ERROR: {traceback.format_exc()}")
                 return None
             except Exception as e:
-                print(f"FULL ERROR: {traceback.format_exc()}")
+                st.write(f"FULL ERROR: {traceback.format_exc()}")
                 time.sleep((attempt + 1) * 2)
-    print(f"ERROR: All models and attempts exhausted for question_type={question_type} difficulty={difficulty}")
+    st.write(f"ERROR: All models and attempts exhausted for question_type={question_type} difficulty={difficulty}")
     return None
 
 
@@ -559,7 +561,11 @@ def load_new_question(interest, skill):
     if st.session_state.focus_skill and question_number in [2, 4, 6, 8]:
         selected_skill = st.session_state.focus_skill
 
-    data = generate_question(interest, selected_skill, st.session_state.difficulty, question_number, question_type)
+    try:
+        data = generate_question(interest, selected_skill, st.session_state.difficulty, question_number, question_type)
+    except Exception as e:
+        st.error(f"DEBUG ERROR: {str(e)}")
+        return False
     if data:
         st.session_state.question_data = data
         st.session_state.question_count += 1
