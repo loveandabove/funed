@@ -491,6 +491,7 @@ def extract_text_from_message(message):
 
 def generate_question(interest, skill, difficulty, question_number, question_type="Star Renaissance"):
     if client is None:
+        print("ERROR: Anthropic client is None — API key missing or not loaded")
         return None
 
     # Get student name and pronoun from session state
@@ -510,10 +511,14 @@ def generate_question(interest, skill, difficulty, question_number, question_typ
                 data = extract_json_object(raw)
                 if data:
                     return data
-            except json.JSONDecodeError:
+                print(f"ERROR: JSON parse failed for model={model_name} attempt={attempt+1}, raw={raw[:200]}")
+            except json.JSONDecodeError as e:
+                print(f"ERROR: JSONDecodeError model={model_name} attempt={attempt+1}: {e}")
                 return None
-            except Exception:
+            except Exception as e:
+                print(f"ERROR: Exception model={model_name} attempt={attempt+1}: {type(e).__name__}: {e}")
                 time.sleep((attempt + 1) * 2)
+    print(f"ERROR: All models and attempts exhausted for question_type={question_type} difficulty={difficulty}")
     return None
 
 
