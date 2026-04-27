@@ -7,7 +7,7 @@ import json
 import traceback
 
 # --- VERSION ---
-VERSION = "1.7"  # April 26, 2026 - Randomize correct answer position (fix predictable A/B/C/D rotation)
+VERSION = "1.6"  # April 26, 2026 - Replace emoji icons in onboarding form (Windows fix)
 
 # --- API KEY ---
 
@@ -242,7 +242,14 @@ def build_prompt(interest, skill, difficulty, question_number, question_type="St
             topic_instruction = "Write in a formal academic style with an objective tone."
             topic_description = "Interest theme: formal academic topic"
 
-    correct_answer = random.choice(["A", "B", "C", "D"])
+    # Determine correct answer distribution to ensure balance
+    # Pattern: A, B, C, D repeating (slightly more A and B to reach 10)
+    answer_pattern = {
+        1: "A", 2: "B", 3: "C", 4: "D",
+        5: "A", 6: "B", 7: "C", 8: "D",
+        9: "A", 10: "B"
+    }
+    correct_answer = answer_pattern.get(question_number, "A")
 
     # Get used topics to avoid repetition
     used_topics = st.session_state.get("used_topics", [])
