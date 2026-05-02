@@ -7,7 +7,7 @@ import json
 import traceback
 
 # --- VERSION ---
-VERSION = "1.8"  # May 2, 2026 - 34 questions per session, random type distribution (~40% FunEd, ~30% STAR, ~30% Renaissance)
+VERSION = "1.7"  # April 26, 2026 - Randomize correct answer position (fix predictable A/B/C/D rotation)
 
 # --- API KEY ---
 
@@ -133,23 +133,8 @@ if "pronoun" not in st.session_state:
     st.session_state.pronoun = ""
 if "skill_index" not in st.session_state:
     st.session_state.skill_index = 0
-TOTAL_QUESTIONS = 34
-
 if "question_count" not in st.session_state:
     st.session_state.question_count = 0
-
-def generate_question_sequence():
-    funed_count = round(TOTAL_QUESTIONS * 0.40)       # 14
-    star_count = round(TOTAL_QUESTIONS * 0.30)        # 10
-    renaissance_count = TOTAL_QUESTIONS - funed_count - star_count  # 10
-    seq = (["FunEd"] * funed_count +
-           ["STAR Reading"] * star_count +
-           ["Star Renaissance"] * renaissance_count)
-    random.shuffle(seq)
-    return seq
-
-if "question_type_sequence" not in st.session_state:
-    st.session_state.question_type_sequence = generate_question_sequence()
 if "show_results" not in st.session_state:
     st.session_state.show_results = False
 if "started" not in st.session_state:
@@ -537,15 +522,36 @@ def generate_question(interest, skill, difficulty, question_number, question_typ
 
 def load_new_question(interest, skill):
     import traceback
-    if st.session_state.question_count >= TOTAL_QUESTIONS:
+    if st.session_state.question_count >= 10:
         return False
     question_number = st.session_state.question_count + 1
 
-    question_type = st.session_state.question_type_sequence[st.session_state.question_count]
+    # Determine question type based on question number AND difficulty level
+    # If difficulty >= 7 (advanced): More FunEd questions (5 out of 10)
+    # If difficulty < 7 (beginner/intermediate): Original pattern (4 FunEd, 3 STAR, 3 Renaissance)
 
-    # Apply focus_skill every 4th question
+    current_difficulty = st.session_state.difficulty
+
+    if current_difficulty >= 7:
+        # Advanced level: FunEd = 1,3,5,7,9 / STAR = 2,8 / Renaissance = 4,6,10
+        if question_number in [1, 3, 5, 7, 9]:
+            question_type = "FunEd"
+        elif question_number in [2, 8]:
+            question_type = "STAR Reading"
+        else:  # 4, 6, 10
+            question_type = "Star Renaissance"
+    else:
+        # Beginner/Intermediate: Original pattern FunEd = 1,4,7,10 / STAR = 2,5,8 / Renaissance = 3,6,9
+        if question_number in [1, 4, 7, 10]:
+            question_type = "FunEd"
+        elif question_number in [2, 5, 8]:
+            question_type = "STAR Reading"
+        else:  # 3, 6, 9
+            question_type = "Star Renaissance"
+
+    # Weighted skill system: if focus_skill exists, use it for questions 2, 4, 6, 8
     selected_skill = skill
-    if st.session_state.focus_skill and question_number % 4 == 2:
+    if st.session_state.focus_skill and question_number in [2, 4, 6, 8]:
         selected_skill = st.session_state.focus_skill
 
     try:
@@ -627,7 +633,6 @@ if not st.session_state.started:
             st.session_state.last_result = None
             st.session_state.show_results = False
             st.session_state.question_count = 0
-            st.session_state.question_type_sequence = generate_question_sequence()
             st.session_state.error_message = ""
             # Reset question type stats
             st.session_state.correct_star_reading = 0
@@ -713,7 +718,6 @@ with col1:
             st.session_state.correct = 0
             st.session_state.total = 0
             st.session_state.question_count = 0
-            st.session_state.question_type_sequence = generate_question_sequence()
             st.session_state.question_data = None
             st.session_state.answered = False
             st.session_state.last_result = None
@@ -821,7 +825,18 @@ with col2:
         st.markdown("### Results by Question Type")
         st.write("")
 
-        st.markdown(f"**🎮 FunEd**")
+        # FunEd stats
+        # Determine which questions were FunEd based on difficulty
+        if difficulty >= 7:
+            funed_questions = "1, 3, 5, 7, 9"
+            star_questions = "2, 8"
+            renaissance_questions = "4, 6, 10"
+        else:
+            funed_questions = "1, 4, 7, 10"
+            star_questions = "2, 5, 8"
+            renaissance_questions = "3, 6, 9"
+
+        st.markdown(f"**🎮 FunEd (Questions {funed_questions})**")
         funed_correct = st.session_state.correct_funed
         funed_total = st.session_state.total_funed
         funed_time = st.session_state.time_funed
@@ -836,7 +851,7 @@ with col2:
         st.write("")
 
         # STAR Reading stats
-        st.markdown(f"**📚 STAR Reading**")
+        st.markdown(f"**📚 STAR Reading (Questions {star_questions})**")
         star_reading_correct = st.session_state.correct_star_reading
         star_reading_total = st.session_state.total_star_reading
         star_reading_time = st.session_state.time_star_reading
@@ -960,7 +975,6 @@ with col2:
             st.session_state.total = 0
             st.session_state.difficulty = 5
             st.session_state.question_count = 0
-            st.session_state.question_type_sequence = generate_question_sequence()
             st.session_state.question_data = None
             st.session_state.answered = False
             st.session_state.last_result = None
@@ -1074,7 +1088,7 @@ with col2:
 
         if st.session_state.answered:
             if st.button("Next Question", use_container_width=True):
-                if st.session_state.question_count >= TOTAL_QUESTIONS:
+                if st.session_state.question_count >= 10:
                     st.session_state.show_results = True
                     st.session_state.question_data = None
                     st.session_state.answered = False
