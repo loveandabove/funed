@@ -35,10 +35,6 @@ API_KEY = (
     or st.secrets.get("CLAUDE_API_KEY")
 )
 client = Anthropic(api_key=API_KEY) if API_KEY else None
-if not API_KEY:
-    st.error("DEBUG: API_KEY is None or empty")
-else:
-    st.success(f"DEBUG: API_KEY found, length={len(API_KEY)}")
 
 # --- CONFIG ---
 INTERESTS = ["Minecraft", "Soccer", "Chess", "Space Travel"]
@@ -504,10 +500,8 @@ def extract_text_from_message(message):
 
 def generate_question(interest, skill, difficulty, question_number, question_type="Star Renaissance"):
     if client is None:
-        st.write("ERROR: Anthropic client is None — API key missing or not loaded")
         return None
 
-    # Get student name and pronoun from session state
     student_name = st.session_state.get("student_name", "")
     pronoun = st.session_state.get("pronoun", "")
 
@@ -524,14 +518,10 @@ def generate_question(interest, skill, difficulty, question_number, question_typ
                 data = extract_json_object(raw)
                 if data:
                     return data
-                st.write(f"ERROR: JSON parse failed for model={model_name} attempt={attempt+1}, raw={raw[:200]}")
-            except json.JSONDecodeError as e:
-                st.write(f"FULL ERROR: {traceback.format_exc()}")
+            except json.JSONDecodeError:
                 return None
-            except Exception as e:
-                st.write(f"FULL ERROR: {traceback.format_exc()}")
+            except Exception:
                 time.sleep((attempt + 1) * 2)
-    st.write(f"ERROR: All models and attempts exhausted for question_type={question_type} difficulty={difficulty}")
     return None
 
 
@@ -550,8 +540,7 @@ def load_new_question(interest, skill):
 
     try:
         data = generate_question(interest, selected_skill, st.session_state.difficulty, question_number, question_type)
-    except Exception as e:
-        st.error(f"DEBUG ERROR: {str(e)}")
+    except Exception:
         return False
     if data:
         st.session_state.question_data = data
