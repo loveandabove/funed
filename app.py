@@ -273,9 +273,9 @@ def build_prompt(interest, skill, difficulty, question_number, question_type="St
     correct_answer = random.choice(["A", "B", "C", "D"])
 
     # Get used topics to avoid repetition
-    used_topics = st.session_state.get("used_topics", [])
+    used_topics = st.session_state.get("used_topics", [])[-6:]  # last 6 only
     if used_topics:
-        topic_restriction = f"\n\n**IMPORTANT - TOPIC RESTRICTION:**\nDo NOT use these topics that have already been used in this session:\n" + "\n".join([f"- {topic}" for topic in used_topics]) + "\n\nChoose a COMPLETELY DIFFERENT topic/subject/scenario. Be creative and vary the content significantly."
+        topic_restriction = f"\n\n**TOPIC RESTRICTION:** Do NOT use: {', '.join(used_topics)}. Choose a different topic."
     else:
         topic_restriction = ""
 
@@ -562,7 +562,7 @@ def generate_question(interest, skill, difficulty, question_number, question_typ
             try:
                 response = client.messages.create(
                     model=model_name,
-                    max_tokens=1000,
+                    max_tokens=1800,
                     messages=[{"role": "user", "content": prompt}]
                 )
                 raw = extract_text_from_message(response)
