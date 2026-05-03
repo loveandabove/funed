@@ -7,7 +7,7 @@ import json
 import traceback
 
 # --- VERSION ---
-VERSION = "2.0"  # May 3, 2026 - Fix AttributeError on vocab_item type check
+VERSION = "1.9"  # May 2, 2026 - Add Math questions (22 ELA + 12 Math = 34 total)
 
 # --- API KEY ---
 
@@ -1096,12 +1096,8 @@ with col2:
             st.write("")
             with st.expander("📖 Vocabulary", expanded=False):
                 for vocab_item in q["vocabulary"]:
-                    if isinstance(vocab_item, dict):
-                        word = vocab_item.get("word", "")
-                        definition = vocab_item.get("definition", "")
-                    else:
-                        word = str(vocab_item)
-                        definition = ""
+                    word = vocab_item.get("word", "")
+                    definition = vocab_item.get("definition", "")
                     if word and definition:
                         st.markdown(f"**{word}:** {definition}")
 
