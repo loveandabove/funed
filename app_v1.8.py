@@ -7,7 +7,7 @@ import json
 import traceback
 
 # --- VERSION ---
-VERSION = "1.9"  # May 2, 2026 - Add Math questions (22 ELA + 12 Math = 34 total)
+VERSION = "1.8"  # May 2, 2026 - 34 questions per session, random type distribution (~40% FunEd, ~30% STAR, ~30% Renaissance)
 
 # --- API KEY ---
 
@@ -130,25 +130,17 @@ if "pronoun" not in st.session_state:
 if "skill_index" not in st.session_state:
     st.session_state.skill_index = 0
 TOTAL_QUESTIONS = 34
-ELA_QUESTIONS = 22
-MATH_QUESTIONS = 12
-
-MATH_TOPICS = ["fractions", "ratios", "percentages", "basic algebra", "geometry", "data & statistics"]
 
 if "question_count" not in st.session_state:
     st.session_state.question_count = 0
 
 def generate_question_sequence():
-    # ELA: 22 questions (~40% FunEd, ~30% STAR, ~30% Renaissance)
-    funed_count = round(ELA_QUESTIONS * 0.40)          # 9
-    star_count = round(ELA_QUESTIONS * 0.30)           # 7
-    renaissance_count = ELA_QUESTIONS - funed_count - star_count  # 6
-    ela_seq = (["FunEd"] * funed_count +
-               ["STAR Reading"] * star_count +
-               ["Star Renaissance"] * renaissance_count)
-    # Math: 12 questions
-    math_seq = ["Math"] * MATH_QUESTIONS
-    seq = ela_seq + math_seq
+    funed_count = round(TOTAL_QUESTIONS * 0.40)       # 14
+    star_count = round(TOTAL_QUESTIONS * 0.30)        # 10
+    renaissance_count = TOTAL_QUESTIONS - funed_count - star_count  # 10
+    seq = (["FunEd"] * funed_count +
+           ["STAR Reading"] * star_count +
+           ["Star Renaissance"] * renaissance_count)
     random.shuffle(seq)
     return seq
 
@@ -162,7 +154,7 @@ if "error_message" not in st.session_state:
     st.session_state.error_message = ""
 
 # Question types
-QUESTION_TYPES = ["STAR Reading", "Star Renaissance", "FunEd", "Math"]
+QUESTION_TYPES = ["STAR Reading", "Star Renaissance", "FunEd"]
 
 # Stats by question type
 if "correct_star_reading" not in st.session_state:
@@ -186,13 +178,6 @@ if "total_funed" not in st.session_state:
 if "time_funed" not in st.session_state:
     st.session_state.time_funed = 0.0
 
-if "correct_math" not in st.session_state:
-    st.session_state.correct_math = 0
-if "total_math" not in st.session_state:
-    st.session_state.total_math = 0
-if "time_math" not in st.session_state:
-    st.session_state.time_math = 0.0
-
 # Current question timing and type
 if "question_start_time" not in st.session_state:
     st.session_state.question_start_time = None
@@ -206,8 +191,6 @@ if "max_difficulty_star_renaissance" not in st.session_state:
     st.session_state.max_difficulty_star_renaissance = 5
 if "max_difficulty_funed" not in st.session_state:
     st.session_state.max_difficulty_funed = 5
-if "max_difficulty_math" not in st.session_state:
-    st.session_state.max_difficulty_math = 5
 
 # Track used topics to avoid repetition
 if "used_topics" not in st.session_state:
@@ -483,38 +466,6 @@ IMPORTANT:
 2. Include a "topic" field with a brief description of the main subject/topic of your passage.
 3. Include a "vocabulary" array with 3-5 words and their student-friendly definitions."""
 
-def build_math_prompt(interest, difficulty, question_number):
-    level_desc = DIFFICULTY_MAP[difficulty]
-    correct_answer = random.choice(["A", "B", "C", "D"])
-    math_topic = MATH_TOPICS[(question_number - 1) % len(MATH_TOPICS)]
-
-    return f"""You are generating a 6th grade math word problem about {interest} for a student named Ediz.
-
-Topic: {math_topic}
-Difficulty: {level_desc}
-The correct answer MUST be choice {correct_answer}.
-
-REQUIREMENTS:
-- Write a short word problem (2-4 sentences) using {interest} as the real-world context
-- The problem must test {math_topic}
-- All 4 answer choices must be plausible numbers (no obviously wrong answers)
-- Only one answer is correct: choice {correct_answer}
-- Include a clear step-by-step explanation of how to solve it
-
-Return ONLY valid JSON, no extra text:
-{{
-  "passage": "the word problem text here",
-  "question": "What is the answer?",
-  "choices": {{"A": "...", "B": "...", "C": "...", "D": "..."}},
-  "answer": "{correct_answer}",
-  "explanation": "Step-by-step solution here",
-  "topic": "{math_topic}",
-  "skill": "Math",
-  "vocabulary": []
-}}
-
-IMPORTANT: The correct answer must be in choice {correct_answer}."""
-
 # --- API CALL ---
 MODELS = ["claude-sonnet-4-6", "claude-opus-4-6", "claude-sonnet-4-5-20250929", "claude-haiku-4-5-20251001"]
 
@@ -551,12 +502,10 @@ def generate_question(interest, skill, difficulty, question_number, question_typ
     if client is None:
         return None
 
-    if question_type == "Math":
-        prompt = build_math_prompt(interest, difficulty, question_number)
-    else:
-        student_name = st.session_state.get("student_name", "")
-        pronoun = st.session_state.get("pronoun", "")
-        prompt = build_prompt(interest, skill, difficulty, question_number, question_type, student_name, pronoun)
+    student_name = st.session_state.get("student_name", "")
+    pronoun = st.session_state.get("pronoun", "")
+
+    prompt = build_prompt(interest, skill, difficulty, question_number, question_type, student_name, pronoun)
     for model_name in MODELS:
         for attempt in range(3):
             try:
@@ -679,16 +628,12 @@ if not st.session_state.started:
             st.session_state.correct_funed = 0
             st.session_state.total_funed = 0
             st.session_state.time_funed = 0.0
-            st.session_state.correct_math = 0
-            st.session_state.total_math = 0
-            st.session_state.time_math = 0.0
             st.session_state.question_start_time = None
             st.session_state.current_question_type = None
             # Reset max difficulty per type
             st.session_state.max_difficulty_star_reading = 5
             st.session_state.max_difficulty_star_renaissance = 5
             st.session_state.max_difficulty_funed = 5
-            st.session_state.max_difficulty_math = 5
             # Reset used topics
             st.session_state.used_topics = []
             # Reset skill tracking
@@ -732,10 +677,6 @@ def update_difficulty(correct, question_type=None):
             st.session_state.max_difficulty_funed = max(
                 st.session_state.max_difficulty_funed, current_diff
             )
-        elif question_type == "Math":
-            st.session_state.max_difficulty_math = max(
-                st.session_state.max_difficulty_math, current_diff
-            )
 
 # --- UI ---
 st.markdown("# ⭐ FUN ED")
@@ -778,16 +719,12 @@ with col1:
             st.session_state.correct_funed = 0
             st.session_state.total_funed = 0
             st.session_state.time_funed = 0.0
-            st.session_state.correct_math = 0
-            st.session_state.total_math = 0
-            st.session_state.time_math = 0.0
             st.session_state.question_start_time = None
             st.session_state.current_question_type = None
             # Reset max difficulty per type
             st.session_state.max_difficulty_star_reading = 5
             st.session_state.max_difficulty_star_renaissance = 5
             st.session_state.max_difficulty_funed = 5
-            st.session_state.max_difficulty_math = 5
             # Reset used topics
             st.session_state.used_topics = []
             # Reset skill tracking
@@ -903,7 +840,7 @@ with col2:
         st.write("")
 
         # Star Renaissance stats
-        st.markdown(f"**🌟 Star Renaissance**")
+        st.markdown(f"**🌟 Star Renaissance (Questions {renaissance_questions})**")
         star_renaissance_correct = st.session_state.correct_star_renaissance
         star_renaissance_total = st.session_state.total_star_renaissance
         star_renaissance_time = st.session_state.time_star_renaissance
@@ -913,21 +850,6 @@ with col2:
             st.markdown(f"- Wrong: {star_renaissance_total - star_renaissance_correct}")
             st.markdown(f"- Total Time: {star_renaissance_time:.1f} seconds (Avg: {star_renaissance_time/star_renaissance_total:.1f}s per question)")
             st.markdown(f"- Max Difficulty Reached: Level {star_renaissance_max_diff}/10")
-        else:
-            st.markdown("- No questions answered")
-        st.write("")
-
-        # Math stats
-        st.markdown(f"**🔢 Math**")
-        math_correct = st.session_state.correct_math
-        math_total = st.session_state.total_math
-        math_time = st.session_state.time_math
-        math_max_diff = st.session_state.max_difficulty_math
-        if math_total > 0:
-            st.markdown(f"- Correct: {math_correct} / {math_total}")
-            st.markdown(f"- Wrong: {math_total - math_correct}")
-            st.markdown(f"- Total Time: {math_time:.1f} seconds (Avg: {math_time/math_total:.1f}s per question)")
-            st.markdown(f"- Max Difficulty Reached: Level {math_max_diff}/10")
         else:
             st.markdown("- No questions answered")
         st.write("")
@@ -962,14 +884,6 @@ with col2:
                 "accuracy": funed_correct / funed_total,
                 "avg_time": funed_time / funed_total,
                 "max_diff": funed_max_diff
-            })
-        if math_total > 0:
-            types_data.append({
-                "name": "Math",
-                "icon": "🔢",
-                "accuracy": math_correct / math_total,
-                "avg_time": math_time / math_total,
-                "max_diff": math_max_diff
             })
 
         if len(types_data) >= 2:
@@ -1052,16 +966,12 @@ with col2:
             st.session_state.correct_funed = 0
             st.session_state.total_funed = 0
             st.session_state.time_funed = 0.0
-            st.session_state.correct_math = 0
-            st.session_state.total_math = 0
-            st.session_state.time_math = 0.0
             st.session_state.question_start_time = None
             st.session_state.current_question_type = None
             # Reset max difficulty per type
             st.session_state.max_difficulty_star_reading = 5
             st.session_state.max_difficulty_star_renaissance = 5
             st.session_state.max_difficulty_funed = 5
-            st.session_state.max_difficulty_math = 5
             # Reset used topics
             st.session_state.used_topics = []
             # Reset skill tracking
@@ -1082,8 +992,6 @@ with col2:
             type_icon = "📚"
         elif qtype == "Star Renaissance":
             type_icon = "🌟"
-        elif qtype == "Math":
-            type_icon = "🔢"
         else:  # FunEd
             type_icon = "🎮"
 
@@ -1136,11 +1044,6 @@ with col2:
                         st.session_state.time_funed += elapsed_time
                         if is_correct:
                             st.session_state.correct_funed += 1
-                    elif qtype == "Math":
-                        st.session_state.total_math += 1
-                        st.session_state.time_math += elapsed_time
-                        if is_correct:
-                            st.session_state.correct_math += 1
 
                     # Track skill performance
                     q_skill = q.get("skill", "")
