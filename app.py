@@ -7,7 +7,7 @@ import json
 import traceback
 
 # --- VERSION ---
-VERSION = "2.0"  # May 3, 2026 - Fix AttributeError on vocab_item type check
+VERSION = "2.1"  # May 3, 2026 - Restructure to STAR Reading + STAR Math format
 
 # --- API KEY ---
 
@@ -39,16 +39,24 @@ client = Anthropic(api_key=API_KEY) if API_KEY else None
 # --- CONFIG ---
 INTERESTS = ["Minecraft", "Soccer", "Chess", "Space Travel"]
 
-# Florida B.E.S.T. Standards for 6th Grade ELA
-FLORIDA_BEST_STANDARDS = {
-    "ELA.6.R.1.1": "Character Development & Plot - Analyze how characters develop and advance the plot",
-    "ELA.6.R.1.2": "Thematic Development - Identify and analyze themes and central ideas",
-    "ELA.6.R.2.1": "Text Structures - Analyze text structures and their effects on meaning",
-    "ELA.6.R.2.4": "Argument Development - Evaluate arguments and claims in text",
-    "ELA.6.R.3.1": "Figurative Language - Interpret and analyze figurative language and literary devices"
+READING_DOMAINS = {
+    "Vocabulary in Context": 5,
+    "Main Idea / Central Theme": 3,
+    "Literary Analysis / Character": 3,
+    "Author's Craft / Figurative Language": 3,
+    "Argument & Evidence": 3,
 }
 
-SKILLS = list(FLORIDA_BEST_STANDARDS.keys())
+MATH_DOMAINS = {
+    "Numbers & Operations / Fractions": 4,
+    "Algebra / Expressions": 4,
+    "Geometry & Measurement": 3,
+    "Data Analysis": 3,
+    "Ratios & Proportions": 3,
+}
+
+ALL_DOMAINS = list(READING_DOMAINS.keys()) + list(MATH_DOMAINS.keys())
+
 DIFFICULTY_MAP = {
     1:  "very simple, 2nd grade reading level, short sentences",
     2:  "simple, 3rd grade reading level",
@@ -127,28 +135,19 @@ if "student_name" not in st.session_state:
     st.session_state.student_name = ""
 if "pronoun" not in st.session_state:
     st.session_state.pronoun = ""
-if "skill_index" not in st.session_state:
-    st.session_state.skill_index = 0
 TOTAL_QUESTIONS = 34
-ELA_QUESTIONS = 22
-MATH_QUESTIONS = 12
-
-MATH_TOPICS = ["fractions", "ratios", "percentages", "basic algebra", "geometry", "data & statistics"]
+READING_QUESTIONS = 17
+MATH_QUESTIONS = 17
 
 if "question_count" not in st.session_state:
     st.session_state.question_count = 0
 
 def generate_question_sequence():
-    # ELA: 22 questions (~40% FunEd, ~30% STAR, ~30% Renaissance)
-    funed_count = round(ELA_QUESTIONS * 0.40)          # 9
-    star_count = round(ELA_QUESTIONS * 0.30)           # 7
-    renaissance_count = ELA_QUESTIONS - funed_count - star_count  # 6
-    ela_seq = (["FunEd"] * funed_count +
-               ["STAR Reading"] * star_count +
-               ["Star Renaissance"] * renaissance_count)
-    # Math: 12 questions
-    math_seq = ["Math"] * MATH_QUESTIONS
-    seq = ela_seq + math_seq
+    seq = []
+    for domain, count in READING_DOMAINS.items():
+        seq.extend([{"subject": "Reading", "domain": domain}] * count)
+    for domain, count in MATH_DOMAINS.items():
+        seq.extend([{"subject": "Math", "domain": domain}] * count)
     random.shuffle(seq)
     return seq
 
@@ -161,31 +160,13 @@ if "started" not in st.session_state:
 if "error_message" not in st.session_state:
     st.session_state.error_message = ""
 
-# Question types
-QUESTION_TYPES = ["STAR Reading", "Star Renaissance", "FunEd", "Math"]
-
-# Stats by question type
-if "correct_star_reading" not in st.session_state:
-    st.session_state.correct_star_reading = 0
-if "total_star_reading" not in st.session_state:
-    st.session_state.total_star_reading = 0
-if "time_star_reading" not in st.session_state:
-    st.session_state.time_star_reading = 0.0
-
-if "correct_star_renaissance" not in st.session_state:
-    st.session_state.correct_star_renaissance = 0
-if "total_star_renaissance" not in st.session_state:
-    st.session_state.total_star_renaissance = 0
-if "time_star_renaissance" not in st.session_state:
-    st.session_state.time_star_renaissance = 0.0
-
-if "correct_funed" not in st.session_state:
-    st.session_state.correct_funed = 0
-if "total_funed" not in st.session_state:
-    st.session_state.total_funed = 0
-if "time_funed" not in st.session_state:
-    st.session_state.time_funed = 0.0
-
+# Stats by subject
+if "correct_reading" not in st.session_state:
+    st.session_state.correct_reading = 0
+if "total_reading" not in st.session_state:
+    st.session_state.total_reading = 0
+if "time_reading" not in st.session_state:
+    st.session_state.time_reading = 0.0
 if "correct_math" not in st.session_state:
     st.session_state.correct_math = 0
 if "total_math" not in st.session_state:
@@ -193,19 +174,17 @@ if "total_math" not in st.session_state:
 if "time_math" not in st.session_state:
     st.session_state.time_math = 0.0
 
-# Current question timing and type
+# Current question timing and metadata
 if "question_start_time" not in st.session_state:
     st.session_state.question_start_time = None
-if "current_question_type" not in st.session_state:
-    st.session_state.current_question_type = None
+if "current_subject" not in st.session_state:
+    st.session_state.current_subject = None
+if "current_domain" not in st.session_state:
+    st.session_state.current_domain = None
 
-# Max difficulty reached per question type
-if "max_difficulty_star_reading" not in st.session_state:
-    st.session_state.max_difficulty_star_reading = 5
-if "max_difficulty_star_renaissance" not in st.session_state:
-    st.session_state.max_difficulty_star_renaissance = 5
-if "max_difficulty_funed" not in st.session_state:
-    st.session_state.max_difficulty_funed = 5
+# Max difficulty reached per subject
+if "max_difficulty_reading" not in st.session_state:
+    st.session_state.max_difficulty_reading = 5
 if "max_difficulty_math" not in st.session_state:
     st.session_state.max_difficulty_math = 5
 
@@ -213,29 +192,17 @@ if "max_difficulty_math" not in st.session_state:
 if "used_topics" not in st.session_state:
     st.session_state.used_topics = []
 
-# Skill tracking — correct/total per skill
-SKILL_NAMES = {
-    "ELA.6.R.1.1": "Character Development",
-    "ELA.6.R.1.2": "Central Theme",
-    "ELA.6.R.2.1": "Text Structure",
-    "ELA.6.R.2.4": "Argument & Evidence",
-    "ELA.6.R.3.1": "Figurative Language",
-}
-if "skill_correct" not in st.session_state:
-    st.session_state.skill_correct = {s: 0 for s in SKILL_NAMES}
-if "skill_total" not in st.session_state:
-    st.session_state.skill_total = {s: 0 for s in SKILL_NAMES}
-
-# Focus skill for next session (weakest skill from previous session)
-if "focus_skill" not in st.session_state:
-    st.session_state.focus_skill = None
+# Domain-level tracking
+if "domain_correct" not in st.session_state:
+    st.session_state.domain_correct = {d: 0 for d in ALL_DOMAINS}
+if "domain_total" not in st.session_state:
+    st.session_state.domain_total = {d: 0 for d in ALL_DOMAINS}
 
 # --- PROMPT ENGINE ---
-def build_prompt(interest, skill, difficulty, question_number, question_type="Star Renaissance", student_name="", pronoun=""):
+def build_reading_prompt(interest, difficulty, domain, student_name="", pronoun=""):
     level_desc = DIFFICULTY_MAP[difficulty]
-    standard_description = FLORIDA_BEST_STANDARDS[skill]
+    correct_answer = random.choice(["A", "B", "C", "D"])
 
-    # Passage length based on difficulty
     if difficulty <= 2:
         word_count = "60 to 80 words"
         sentence_complexity = "Use short, simple sentences (5-10 words each)."
@@ -248,272 +215,143 @@ def build_prompt(interest, skill, difficulty, question_number, question_type="St
     elif difficulty <= 8:
         word_count = "130 to 160 words"
         sentence_complexity = "Use varied sentence structures including complex sentences with multiple clauses."
-    else:  # 9-10
+    else:
         word_count = "160 to 200 words"
-        sentence_complexity = "Use sophisticated sentence structures with embedded clauses, appositives, and varied syntax."
+        sentence_complexity = "Use sophisticated sentence structures with embedded clauses and varied syntax."
 
-    # Determine prompt style based on question type
-    if question_type == "STAR Reading":
-        topic_instruction = "Write in a formal academic STAR test style with a dry, objective tone. Use real-world topics from science, history, nature, or social studies. No pop culture or student interests."
-        topic_description = "Interest theme: formal academic real-world topic"
-    elif question_type == "FunEd":
-        topic_instruction = f"Always use the student's interest ({interest}) as the passage topic. Make it engaging, fun, and relevant to their interests while maintaining educational value."
-        topic_description = f"Interest theme: {interest}"
-    else:  # Star Renaissance (default)
-        if question_number in [1, 4, 7, 10]:
-            topic_instruction = f"Use the student's interest ({interest}) as the passage topic."
-            topic_description = f"Interest theme: {interest}"
-        elif question_number in [2, 5, 8]:
-            topic_instruction = "Use a neutral real-world topic such as science, nature, or history. No pop culture."
-            topic_description = "Interest theme: neutral real-world topic"
-        else:
-            topic_instruction = "Write in a formal academic style with an objective tone."
-            topic_description = "Interest theme: formal academic topic"
-
-    correct_answer = random.choice(["A", "B", "C", "D"])
-
-    # Get used topics to avoid repetition
-    used_topics = st.session_state.get("used_topics", [])[-6:]  # last 6 only
+    used_topics = st.session_state.get("used_topics", [])[-6:]
     if used_topics:
         topic_restriction = f"\n\n**TOPIC RESTRICTION:** Do NOT use: {', '.join(used_topics)}. Choose a different topic."
     else:
         topic_restriction = ""
 
-    # Skill-specific guidance based on Florida B.E.S.T. Standards
-    if skill == "ELA.6.R.1.1":
-        skill_guidance = """
-- Create a narrative passage with clear character(s) and plot events
-- Show character development through actions, dialogue, thoughts, or interactions
-- Question should ask about HOW characters develop or HOW they advance the plot
-- Example stems: 'How does the character\'s action reveal their development?' 'What effect does [event] have on the plot?'"""
-    elif skill == "ELA.6.R.1.2":
-        skill_guidance = """
-- Write a passage with a clear theme or central idea (e.g., perseverance, friendship, courage, discovery)
-- Include evidence that develops this theme throughout
-- Question should ask about the theme or central idea and how it develops
-- Example stems: 'What is the central theme?' 'How does the author develop the theme of [X]?'"""
-    elif skill == "ELA.6.R.2.1":
-        skill_guidance = """
-- Use a clear text structure (chronological, cause-effect, problem-solution, compare-contrast, descriptive)
-- Make the structure purposeful and integral to meaning
-- Question should ask about the structure and its effect
-- Example stems: 'How does the author organize the information?' 'What is the effect of the [chronological/cause-effect] structure?'"""
-    elif skill == "ELA.6.R.2.4":
-        skill_guidance = """
-- Present an argument or claim with supporting evidence
-- Include reasoning that connects evidence to claim
-- Question should evaluate the argument's strength, evidence quality, or reasoning
-- Example stems: 'Which evidence best supports the author\'s claim?' 'What weakens the author\'s argument?'"""
-    else:  # ELA.6.R.3.1
-        skill_guidance = """
-- Include figurative language (metaphor, simile, personification, hyperbole, idiom, symbolism, or allusion)
-- Use it purposefully to enhance meaning, mood, or tone
-- Question should ask about interpretation or effect of the figurative language
-- Example stems: 'What does the metaphor [X] reveal?' 'The phrase \'[X]\' suggests that...' 'What effect does the personification create?'"""
+    domain_guidance = {
+        "Vocabulary in Context": (
+            "Focus: vocabulary in context\n"
+            "- Choose 1-2 challenging words in the passage that students can infer from context\n"
+            "- Question: 'As used in the passage, the word ___ most nearly means...'\n"
+            "- Correct answer: meaning derived from context, NOT dictionary definition\n"
+            "- Wrong answers: other real meanings of the word that don't fit this context"
+        ),
+        "Main Idea / Central Theme": (
+            "Focus: main idea or central theme\n"
+            "- Passage should develop one clear central idea or theme\n"
+            "- Question: 'What is the central idea/theme?' or 'How does the author develop the theme of...?'\n"
+            "- Correct answer: paraphrases the theme using inference\n"
+            "- Wrong answers: supporting details mistaken for main idea, or overly broad/narrow statements"
+        ),
+        "Literary Analysis / Character": (
+            "Focus: character development and analysis\n"
+            "- Create a character who changes, faces conflict, or reveals traits through actions\n"
+            "- Question: 'How does [character]'s behavior reveal...?' or 'What does [event] suggest about [character]?'\n"
+            "- Use inference stems: 'most likely', 'primarily suggests', 'best supported by'\n"
+            "- Wrong answers: reverses character logic, uses passage words with wrong meaning, or only partially correct"
+        ),
+        "Author's Craft / Figurative Language": (
+            "Focus: figurative language, tone, author's craft\n"
+            "- Include at least one clear figurative device: metaphor, simile, personification, hyperbole, or idiom\n"
+            "- Question: 'What does the phrase [X] suggest?' or 'The author uses [device] to...'\n"
+            "- Correct answer: interprets the meaning/effect, does NOT repeat the literal words\n"
+            "- Wrong answers: literal interpretation, or effect on wrong element"
+        ),
+        "Argument & Evidence": (
+            "Focus: argument, claim, and evidence\n"
+            "- Write a short argumentative or informational passage with a clear claim\n"
+            "- Include at least 2 pieces of supporting evidence\n"
+            "- Question: 'Which evidence best supports the claim?' or 'What weakens the argument?'\n"
+            "- Correct answer: strongest/most relevant evidence\n"
+            "- Wrong answers: irrelevant facts, contradictory evidence, or details that don't support the claim"
+        ),
+    }
 
-    # FunEd questions require special advanced requirements
-    if question_type == "FunEd":
-        return f"""You are generating a FunEd reading comprehension question about {interest} for a 6th grade student.
+    guidance = domain_guidance.get(domain, "Write a passage and ask a comprehension question.")
 
-**Florida B.E.S.T. Standard:** {skill}
-**Standard Description:** {standard_description}
+    name_instruction = f"The protagonist must be named {student_name} and use {pronoun} pronouns." if student_name else ""
 
-**PASSAGE REQUIREMENTS:**
-- Length: {word_count}
-- Reading level: {level_desc}
-- {sentence_complexity}
-- Topic: **{interest}** (Make it engaging, fun, and relevant to this interest){topic_restriction}
-- **IMPORTANT: The protagonist must be named {student_name} and use {pronoun} pronouns throughout the passage.**
-- **Character must face conflicting motivations** (not just one obstacle - internal conflict, tough choices, competing desires)
-- **Answer cannot be found in a single sentence** — requires inference across multiple parts of the passage
-- **No sentence should directly state the theme** — theme should emerge through events and character actions
+    return f"""You are generating a 6th grade STAR Reading comprehension question.
 
-**QUESTION REQUIREMENTS:**
-{skill_guidance}
-- **Use inference stems:** 'most likely', 'primarily serves to', 'best supported by', 'most strongly implies', 'suggests that'
-- Ask **WHY** or **WHAT IT IMPLIES** — never ask what is explicitly stated
-- Require students to connect multiple details to form conclusion
-
-**ANSWER CHOICE REQUIREMENTS - CRITICAL:**
-- Provide exactly 4 answer choices labeled A, B, C, D
-- **The correct answer MUST be choice {correct_answer}** - Structure your choices so that {correct_answer} is the correct answer
-- Only ONE choice is correct
-
-**CORRECT ANSWER:**
-- **Paraphrases the inference** using different words than the passage
-- Never copies passage wording
-- Demonstrates deep comprehension, not surface reading
-
-**WRONG ANSWERS - Sophisticated Distractors:**
-- **Wrong Answer Type 1:** Reverses the passage's logic but sounds plausible (opposite conclusion from same evidence)
-- **Wrong Answer Type 2:** Uses passage vocabulary in the wrong context (familiar words, wrong meaning)
-- **Wrong Answer Type 3:** Partially true but misses the central point (gets one detail right, but overall wrong)
-- ALL wrong answers must be defensible at first glance but clearly wrong upon careful analysis
-- Use actual details from the passage but with wrong interpretation
-
-**Example for Understanding:**
-Passage concept: "Alex loved coding but felt pressure from friends to play sports. He started skipping robotics club to practice with the team, but felt empty after each game."
-
-GOOD QUESTION (inference, not explicit):
-✓ "Alex's behavior most strongly implies that he..."
-
-GOOD CORRECT ANSWER (inference + paraphrase):
-✓ "...is sacrificing personal fulfillment for social acceptance"
-  (Passage never says this directly - requires inference from "loved coding", "pressure from friends", "felt empty")
-
-GOOD WRONG ANSWERS:
-✓ Type 1 (reverses logic): "...discovered his true passion through his friends' encouragement"
-✓ Type 2 (vocabulary misuse): "...became skilled at balancing his interests with team commitments"
-✓ Type 3 (partial truth): "...enjoys spending time with his friends during practice"
-
-**Vocabulary Requirements:**
-- Identify 3-5 challenging vocabulary words from the passage
-- Choose words that are:
-  * Important for understanding the passage
-  * Appropriate for 6th grade level (not too easy, not too hard)
-  * Academic or literary terms that students should learn
-- Provide student-friendly definitions (clear, concise, age-appropriate)
-
-**Output Format:**
-Respond ONLY in this exact JSON format, no markdown, no extra text:
-{{
-  "passage": "...",
-  "question": "...",
-  "choices": {{"A": "...", "B": "...", "C": "...", "D": "..."}},
-  "answer": "{correct_answer}",
-  "explanation": "...",
-  "skill": "{skill}",
-  "topic": "brief 2-4 word description of passage topic (e.g., 'soccer tournament', 'minecraft adventure', 'chess competition')",
-  "vocabulary": [
-    {{"word": "hesitated", "definition": "paused before doing something because of nervousness or uncertainty"}},
-    {{"word": "confident", "definition": "feeling sure about your abilities or that something will happen"}}
-  ]
-}}
-
-IMPORTANT:
-1. Make sure the correct answer is in choice {correct_answer}. The "answer" field in JSON must be "{correct_answer}".
-2. Include a "topic" field with a brief description of the passage topic.
-3. Include a "vocabulary" array with 3-5 words and their student-friendly definitions.
-4. Passage must require inference - no single sentence should contain the full answer."""
-
-    # Standard prompt for STAR Reading and Star Renaissance
-    return f"""You are generating a Florida B.E.S.T. Standards-aligned reading comprehension question for a 6th grade student.
-
-**Florida B.E.S.T. Standard:** {skill}
-**Standard Description:** {standard_description}
-
-**Passage Requirements:**
-- Length: {word_count}
-- Reading level: {level_desc}
-- {sentence_complexity}
-- {topic_instruction}{topic_restriction}
-- **IMPORTANT: The protagonist must be named {student_name} and use {pronoun} pronouns throughout the passage.**
-
-**Question Requirements:**
-{skill_guidance}
-
-**Answer Choice Requirements - CRITICAL:**
-- Provide exactly 4 answer choices labeled A, B, C, D
-- **The correct answer MUST be choice {correct_answer}** - Structure your choices so that {correct_answer} is the correct answer
-- Only ONE choice is correct
-
-**CORRECT ANSWER Requirements:**
-- **DO NOT copy phrases word-for-word from the passage**
-- **MUST paraphrase** - use different words/synonyms to express the same meaning
-- Should demonstrate understanding, not just text matching
-- Example: If passage says "The bird soared high above the clouds", correct answer could be "The bird flew at a great altitude" (NOT "The bird soared high above the clouds")
-
-**WRONG ANSWERS Requirements:**
-- ALL wrong answers must be:
-  * Plausible and sophisticated - not obviously wrong
-  * **Use actual details/facts FROM the passage** but in wrong context or with wrong interpretation
-  * Similar in length and complexity to the correct answer
-  * Defensible at first glance but wrong upon careful analysis
-  * Based on misreading, partial understanding, or incorrect connections
-- Avoid clearly silly, extreme, or absurd wrong answers
-- Wrong answers should include passage vocabulary but with incorrect meaning
-- Make students think critically to identify the correct answer
-
-**Example Scenario:**
-Passage: "Maya hesitated at the edge of the diving board, her hands trembling. She took a deep breath, remembered her coach's advice, and dove into the pool with confidence."
-
-GOOD CORRECT ANSWER (paraphrased):
-✓ "Maya overcame her initial fear and performed the dive successfully"
-  (Does NOT copy "hesitated", "trembling", "dove" - uses "overcame initial fear" and "performed successfully")
-
-GOOD WRONG ANSWERS (use passage details but wrong):
-✓ "Maya decided not to dive because she was too nervous"
-  (Uses "nervous" related to "trembling" but wrong outcome)
-✓ "Maya's coach had to convince her to attempt the dive"
-  (Mentions coach from passage but wrong - she remembered advice, not convinced)
-✓ "Maya jumped without thinking about her technique"
-  (Opposite of what happened - she DID think, "remembered coach's advice")
-
-BAD WRONG ANSWERS (too obvious or silly):
-✗ "Maya turned into a mermaid" (absurd)
-✗ "There is no pool in the passage" (obviously false)
-✗ "Maya is afraid of water forever" (extreme, unsupported)
-
-**Vocabulary Requirements:**
-- Identify 3-5 challenging vocabulary words from the passage
-- Choose words that are:
-  * Important for understanding the passage
-  * Appropriate for 6th grade level (not too easy, not too hard)
-  * Academic or literary terms that students should learn
-- Provide student-friendly definitions (clear, concise, age-appropriate)
-
-**Output Format:**
-Respond ONLY in this exact JSON format, no markdown, no extra text:
-{{
-  "passage": "...",
-  "question": "...",
-  "choices": {{"A": "...", "B": "...", "C": "...", "D": "..."}},
-  "answer": "{correct_answer}",
-  "explanation": "...",
-  "skill": "{skill}",
-  "topic": "brief 2-4 word description of passage topic (e.g., 'soccer tournament', 'space exploration', 'coral reefs')",
-  "vocabulary": [
-    {{"word": "example_word", "definition": "student-friendly definition here"}},
-    {{"word": "another_word", "definition": "another clear definition"}}
-  ]
-}}
-
-IMPORTANT:
-1. Make sure the correct answer is in choice {correct_answer}. The "answer" field in JSON must be "{correct_answer}".
-2. Include a "topic" field with a brief description of the main subject/topic of your passage.
-3. Include a "vocabulary" array with 3-5 words and their student-friendly definitions."""
-
-def build_math_prompt(interest, difficulty, question_number):
-    level_desc = DIFFICULTY_MAP[difficulty]
-    correct_answer = random.choice(["A", "B", "C", "D"])
-    math_topic = MATH_TOPICS[(question_number - 1) % len(MATH_TOPICS)]
-
-    return f"""You are generating a 6th grade math word problem about {interest} for a student named Ediz.
-
-Topic: {math_topic}
+Domain: {domain}
 Difficulty: {level_desc}
-The correct answer MUST be choice {correct_answer}.
+Topic: Use {interest} as the real-world context for the passage. Make it engaging.{topic_restriction}
+{name_instruction}
 
-REQUIREMENTS:
-- Write a short word problem (2-4 sentences) using {interest} as the real-world context
-- The problem must test {math_topic}
-- All 4 answer choices must be plausible numbers (no obviously wrong answers)
-- Only one answer is correct: choice {correct_answer}
-- Include a clear step-by-step explanation of how to solve it
+Passage requirements:
+- Length: {word_count}
+- {sentence_complexity}
+
+Question requirements:
+{guidance}
+
+Answer requirements:
+- The correct answer MUST be choice {correct_answer}
+- Provide exactly 4 choices labeled A, B, C, D
+- Only one is correct
+- Wrong answers must be plausible, not obviously wrong
+
+Vocabulary: include 3-5 challenging words with student-friendly definitions.
 
 Return ONLY valid JSON, no extra text:
 {{
-  "passage": "the word problem text here",
+  "passage": "...",
+  "question": "...",
+  "choices": {{"A": "...", "B": "...", "C": "...", "D": "..."}},
+  "answer": "{correct_answer}",
+  "explanation": "...",
+  "domain": "{domain}",
+  "subject": "Reading",
+  "topic": "2-4 word topic description",
+  "vocabulary": [
+    {{"word": "...", "definition": "..."}},
+    {{"word": "...", "definition": "..."}}
+  ]
+}}
+
+IMPORTANT: correct answer must be in choice {correct_answer}."""
+
+
+def build_math_prompt(interest, difficulty, domain):
+    level_desc = DIFFICULTY_MAP[difficulty]
+    correct_answer = random.choice(["A", "B", "C", "D"])
+
+    domain_guidance = {
+        "Numbers & Operations / Fractions": "fractions, decimals, and operations with rational numbers",
+        "Algebra / Expressions": "algebraic expressions, equations, and solving for unknowns",
+        "Geometry & Measurement": "area, perimeter, volume, angles, or coordinate geometry",
+        "Data Analysis": "reading graphs, calculating mean/median/mode/range, or interpreting data",
+        "Ratios & Proportions": "ratios, proportions, percentages, and unit rates",
+    }
+
+    guidance = domain_guidance.get(domain, "general math problem")
+
+    return f"""You are generating a 6th grade STAR Math word problem.
+
+Domain: {domain}
+Topic: {guidance}
+Difficulty: {level_desc}
+Context: Use {interest} as the real-world scenario.
+The correct answer MUST be choice {correct_answer}.
+
+Requirements:
+- Write a word problem (2-4 sentences) using {interest} as context
+- Test specifically: {guidance}
+- All 4 answer choices must be plausible numbers (close to each other, no obviously wrong answers)
+- Only choice {correct_answer} is correct
+- Include step-by-step explanation
+
+Return ONLY valid JSON, no extra text:
+{{
+  "passage": "word problem text here",
   "question": "What is the answer?",
   "choices": {{"A": "...", "B": "...", "C": "...", "D": "..."}},
   "answer": "{correct_answer}",
-  "explanation": "Step-by-step solution here",
-  "topic": "{math_topic}",
-  "skill": "Math",
+  "explanation": "Step-by-step: ...",
+  "domain": "{domain}",
+  "subject": "Math",
+  "topic": "{domain}",
   "vocabulary": []
 }}
 
-IMPORTANT: The correct answer must be in choice {correct_answer}."""
+IMPORTANT: correct answer must be in choice {correct_answer}."""
 
 # --- API CALL ---
 MODELS = ["claude-sonnet-4-6", "claude-opus-4-6", "claude-sonnet-4-5-20250929", "claude-haiku-4-5-20251001"]
@@ -547,16 +385,16 @@ def extract_text_from_message(message):
     return "".join(parts).strip()
 
 
-def generate_question(interest, skill, difficulty, question_number, question_type="Star Renaissance"):
+def generate_question(interest, domain, subject, difficulty, question_number):
     if client is None:
         return None
 
-    if question_type == "Math":
-        prompt = build_math_prompt(interest, difficulty, question_number)
+    if subject == "Math":
+        prompt = build_math_prompt(interest, difficulty, domain)
     else:
         student_name = st.session_state.get("student_name", "")
         pronoun = st.session_state.get("pronoun", "")
-        prompt = build_prompt(interest, skill, difficulty, question_number, question_type, student_name, pronoun)
+        prompt = build_reading_prompt(interest, difficulty, domain, student_name, pronoun)
     for model_name in MODELS:
         for attempt in range(3):
             try:
@@ -576,31 +414,26 @@ def generate_question(interest, skill, difficulty, question_number, question_typ
     return None
 
 
-def load_new_question(interest, skill):
-    import traceback
+def load_new_question(interest):
     if st.session_state.question_count >= TOTAL_QUESTIONS:
         return False
     question_number = st.session_state.question_count + 1
 
-    question_type = st.session_state.question_type_sequence[st.session_state.question_count]
-
-    # Apply focus_skill every 4th question
-    selected_skill = skill
-    if st.session_state.focus_skill and question_number % 4 == 2:
-        selected_skill = st.session_state.focus_skill
+    item = st.session_state.question_type_sequence[st.session_state.question_count]
+    subject = item["subject"]
+    domain = item["domain"]
 
     try:
-        data = generate_question(interest, selected_skill, st.session_state.difficulty, question_number, question_type)
+        data = generate_question(interest, domain, subject, st.session_state.difficulty, question_number)
     except Exception:
         return False
     if data:
         st.session_state.question_data = data
         st.session_state.question_count += 1
-        st.session_state.current_question_type = question_type
-        st.session_state.question_start_time = time.time()  # Start timing
-        st.session_state.skill_index = (st.session_state.skill_index + 1) % len(SKILLS)
+        st.session_state.current_subject = subject
+        st.session_state.current_domain = domain
+        st.session_state.question_start_time = time.time()
 
-        # Track topic to avoid repetition
         if "topic" in data and data["topic"]:
             if "used_topics" not in st.session_state:
                 st.session_state.used_topics = []
@@ -661,7 +494,6 @@ if not st.session_state.started:
         # Store interests
         if selected:
             st.session_state.interests = selected
-            st.session_state.skill_index = 0
             st.session_state.question_data = None
             st.session_state.answered = False
             st.session_state.last_result = None
@@ -669,35 +501,24 @@ if not st.session_state.started:
             st.session_state.question_count = 0
             st.session_state.question_type_sequence = generate_question_sequence()
             st.session_state.error_message = ""
-            # Reset question type stats
-            st.session_state.correct_star_reading = 0
-            st.session_state.total_star_reading = 0
-            st.session_state.time_star_reading = 0.0
-            st.session_state.correct_star_renaissance = 0
-            st.session_state.total_star_renaissance = 0
-            st.session_state.time_star_renaissance = 0.0
-            st.session_state.correct_funed = 0
-            st.session_state.total_funed = 0
-            st.session_state.time_funed = 0.0
+            # Reset stats
+            st.session_state.correct_reading = 0
+            st.session_state.total_reading = 0
+            st.session_state.time_reading = 0.0
             st.session_state.correct_math = 0
             st.session_state.total_math = 0
             st.session_state.time_math = 0.0
             st.session_state.question_start_time = None
-            st.session_state.current_question_type = None
-            # Reset max difficulty per type
-            st.session_state.max_difficulty_star_reading = 5
-            st.session_state.max_difficulty_star_renaissance = 5
-            st.session_state.max_difficulty_funed = 5
+            st.session_state.current_subject = None
+            st.session_state.current_domain = None
+            st.session_state.max_difficulty_reading = 5
             st.session_state.max_difficulty_math = 5
-            # Reset used topics
             st.session_state.used_topics = []
-            # Reset skill tracking
-            st.session_state.skill_correct = {s: 0 for s in SKILL_NAMES}
-            st.session_state.skill_total = {s: 0 for s in SKILL_NAMES}
+            st.session_state.domain_correct = {d: 0 for d in ALL_DOMAINS}
+            st.session_state.domain_total = {d: 0 for d in ALL_DOMAINS}
             with st.spinner("Generating your first question..."):
                 selected_interest = random.choice(st.session_state.interests)
-                selected_skill = SKILLS[st.session_state.skill_index]
-                if load_new_question(selected_interest, selected_skill):
+                if load_new_question(selected_interest):
                     st.session_state.started = True
                     st.rerun()
                 else:
@@ -711,28 +532,19 @@ if not st.session_state.started:
     st.stop()
 
 # --- ADAPTIVE ENGINE ---
-def update_difficulty(correct, question_type=None):
+def update_difficulty(correct, subject=None):
     if correct:
         st.session_state.difficulty = min(10, st.session_state.difficulty + 1)
     else:
         st.session_state.difficulty = max(1, st.session_state.difficulty - 1)
 
-    # Track max difficulty per question type
-    if question_type:
+    if subject:
         current_diff = st.session_state.difficulty
-        if question_type == "STAR Reading":
-            st.session_state.max_difficulty_star_reading = max(
-                st.session_state.max_difficulty_star_reading, current_diff
+        if subject == "Reading":
+            st.session_state.max_difficulty_reading = max(
+                st.session_state.max_difficulty_reading, current_diff
             )
-        elif question_type == "Star Renaissance":
-            st.session_state.max_difficulty_star_renaissance = max(
-                st.session_state.max_difficulty_star_renaissance, current_diff
-            )
-        elif question_type == "FunEd":
-            st.session_state.max_difficulty_funed = max(
-                st.session_state.max_difficulty_funed, current_diff
-            )
-        elif question_type == "Math":
+        elif subject == "Math":
             st.session_state.max_difficulty_math = max(
                 st.session_state.max_difficulty_math, current_diff
             )
@@ -768,31 +580,21 @@ with col1:
             st.session_state.show_results = False
             st.session_state.interests = []
             st.session_state.started = False
-            # Reset question type stats
-            st.session_state.correct_star_reading = 0
-            st.session_state.total_star_reading = 0
-            st.session_state.time_star_reading = 0.0
-            st.session_state.correct_star_renaissance = 0
-            st.session_state.total_star_renaissance = 0
-            st.session_state.time_star_renaissance = 0.0
-            st.session_state.correct_funed = 0
-            st.session_state.total_funed = 0
-            st.session_state.time_funed = 0.0
+            # Reset stats
+            st.session_state.correct_reading = 0
+            st.session_state.total_reading = 0
+            st.session_state.time_reading = 0.0
             st.session_state.correct_math = 0
             st.session_state.total_math = 0
             st.session_state.time_math = 0.0
             st.session_state.question_start_time = None
-            st.session_state.current_question_type = None
-            # Reset max difficulty per type
-            st.session_state.max_difficulty_star_reading = 5
-            st.session_state.max_difficulty_star_renaissance = 5
-            st.session_state.max_difficulty_funed = 5
+            st.session_state.current_subject = None
+            st.session_state.current_domain = None
+            st.session_state.max_difficulty_reading = 5
             st.session_state.max_difficulty_math = 5
-            # Reset used topics
             st.session_state.used_topics = []
-            # Reset skill tracking
-            st.session_state.skill_correct = {s: 0 for s in SKILL_NAMES}
-            st.session_state.skill_total = {s: 0 for s in SKILL_NAMES}
+            st.session_state.domain_correct = {d: 0 for d in ALL_DOMAINS}
+            st.session_state.domain_total = {d: 0 for d in ALL_DOMAINS}
             st.rerun()
 
 with col2:
@@ -843,191 +645,83 @@ with col2:
 
         st.markdown("**Rating:** " + "⭐" * stars)
 
-        # Display if this session focused on a specific skill
-        if st.session_state.focus_skill:
-            focus_skill_name = SKILL_NAMES.get(st.session_state.focus_skill, "Unknown")
-            st.info(f"📌 **This session focused on:** {focus_skill_name}")
-
         st.write("---")
 
-        # Calculate weakest skill for next session
-        skill_correct = st.session_state.get("skill_correct", {})
-        skill_total = st.session_state.get("skill_total", {})
-        weakest_skill = None
-        lowest_accuracy = 1.0  # Start at 100%
-
-        for skill_code in SKILL_NAMES:
-            total = skill_total.get(skill_code, 0)
-            correct = skill_correct.get(skill_code, 0)
-            if total > 0:
-                accuracy = correct / total
-                if accuracy < lowest_accuracy:
-                    lowest_accuracy = accuracy
-                    weakest_skill = skill_code
-
-        # Set focus_skill for next session
-        if weakest_skill:
-            st.session_state.focus_skill = weakest_skill
-
-        # Detailed stats by question type
-        st.markdown("### Results by Question Type")
+        # Results by subject
+        st.markdown("### Results by Subject")
         st.write("")
 
-        st.markdown(f"**🎮 FunEd**")
-        funed_correct = st.session_state.correct_funed
-        funed_total = st.session_state.total_funed
-        funed_time = st.session_state.time_funed
-        funed_max_diff = st.session_state.max_difficulty_funed
-        if funed_total > 0:
-            st.markdown(f"- Correct: {funed_correct} / {funed_total}")
-            st.markdown(f"- Wrong: {funed_total - funed_correct}")
-            st.markdown(f"- Total Time: {funed_time:.1f} seconds (Avg: {funed_time/funed_total:.1f}s per question)")
-            st.markdown(f"- Max Difficulty Reached: Level {funed_max_diff}/10")
-        else:
-            st.markdown("- No questions answered")
-        st.write("")
-
-        # STAR Reading stats
-        st.markdown(f"**📚 STAR Reading**")
-        star_reading_correct = st.session_state.correct_star_reading
-        star_reading_total = st.session_state.total_star_reading
-        star_reading_time = st.session_state.time_star_reading
-        star_reading_max_diff = st.session_state.max_difficulty_star_reading
-        if star_reading_total > 0:
-            st.markdown(f"- Correct: {star_reading_correct} / {star_reading_total}")
-            st.markdown(f"- Wrong: {star_reading_total - star_reading_correct}")
-            st.markdown(f"- Total Time: {star_reading_time:.1f} seconds (Avg: {star_reading_time/star_reading_total:.1f}s per question)")
-            st.markdown(f"- Max Difficulty Reached: Level {star_reading_max_diff}/10")
-        else:
-            st.markdown("- No questions answered")
-        st.write("")
-
-        # Star Renaissance stats
-        st.markdown(f"**🌟 Star Renaissance**")
-        star_renaissance_correct = st.session_state.correct_star_renaissance
-        star_renaissance_total = st.session_state.total_star_renaissance
-        star_renaissance_time = st.session_state.time_star_renaissance
-        star_renaissance_max_diff = st.session_state.max_difficulty_star_renaissance
-        if star_renaissance_total > 0:
-            st.markdown(f"- Correct: {star_renaissance_correct} / {star_renaissance_total}")
-            st.markdown(f"- Wrong: {star_renaissance_total - star_renaissance_correct}")
-            st.markdown(f"- Total Time: {star_renaissance_time:.1f} seconds (Avg: {star_renaissance_time/star_renaissance_total:.1f}s per question)")
-            st.markdown(f"- Max Difficulty Reached: Level {star_renaissance_max_diff}/10")
-        else:
-            st.markdown("- No questions answered")
-        st.write("")
-
-        # Math stats
-        st.markdown(f"**🔢 Math**")
+        reading_correct = st.session_state.correct_reading
+        reading_total = st.session_state.total_reading
+        reading_time = st.session_state.time_reading
         math_correct = st.session_state.correct_math
         math_total = st.session_state.total_math
         math_time = st.session_state.time_math
-        math_max_diff = st.session_state.max_difficulty_math
-        if math_total > 0:
-            st.markdown(f"- Correct: {math_correct} / {math_total}")
-            st.markdown(f"- Wrong: {math_total - math_correct}")
-            st.markdown(f"- Total Time: {math_time:.1f} seconds (Avg: {math_time/math_total:.1f}s per question)")
-            st.markdown(f"- Max Difficulty Reached: Level {math_max_diff}/10")
-        else:
-            st.markdown("- No questions answered")
+        domain_correct = st.session_state.get("domain_correct", {})
+        domain_total = st.session_state.get("domain_total", {})
+
+        # Reading section
+        st.markdown(f"**📚 Reading — {reading_correct}/{reading_total if reading_total > 0 else READING_QUESTIONS} correct**")
+        if reading_total > 0:
+            st.markdown(f"- Accuracy: {reading_correct/reading_total*100:.0f}%")
+            st.markdown(f"- Avg time: {reading_time/reading_total:.1f}s per question")
+            st.markdown(f"- Max difficulty: Level {st.session_state.max_difficulty_reading}/10")
         st.write("")
 
-        # Comparative Analysis
-        st.write("---")
-        st.markdown("### 📊 Your Performance Analysis")
-        st.write("")
-
-        # Collect data for comparison
-        types_data = []
-        if star_reading_total > 0:
-            types_data.append({
-                "name": "STAR Reading",
-                "icon": "📚",
-                "accuracy": star_reading_correct / star_reading_total,
-                "avg_time": star_reading_time / star_reading_total,
-                "max_diff": star_reading_max_diff
-            })
-        if star_renaissance_total > 0:
-            types_data.append({
-                "name": "Star Renaissance",
-                "icon": "🌟",
-                "accuracy": star_renaissance_correct / star_renaissance_total,
-                "avg_time": star_renaissance_time / star_renaissance_total,
-                "max_diff": star_renaissance_max_diff
-            })
-        if funed_total > 0:
-            types_data.append({
-                "name": "FunEd",
-                "icon": "🎮",
-                "accuracy": funed_correct / funed_total,
-                "avg_time": funed_time / funed_total,
-                "max_diff": funed_max_diff
-            })
-        if math_total > 0:
-            types_data.append({
-                "name": "Math",
-                "icon": "🔢",
-                "accuracy": math_correct / math_total,
-                "avg_time": math_time / math_total,
-                "max_diff": math_max_diff
-            })
-
-        if len(types_data) >= 2:
-            # Speed comparison
-            fastest = min(types_data, key=lambda x: x["avg_time"])
-            slowest = max(types_data, key=lambda x: x["avg_time"])
-            if fastest != slowest:
-                st.markdown(f"**⚡ Speed:** You're fastest at {fastest['icon']} **{fastest['name']}** questions! "
-                           f"(Avg: {fastest['avg_time']:.1f}s vs {slowest['avg_time']:.1f}s for {slowest['icon']} {slowest['name']})")
-
-            # Accuracy comparison
-            most_accurate = max(types_data, key=lambda x: x["accuracy"])
-            least_accurate = min(types_data, key=lambda x: x["accuracy"])
-            if most_accurate != least_accurate:
-                st.markdown(f"**🎯 Accuracy:** You have the highest accuracy in {most_accurate['icon']} **{most_accurate['name']}** questions! "
-                           f"({most_accurate['accuracy']*100:.0f}% vs {least_accurate['accuracy']*100:.0f}% for {least_accurate['icon']} {least_accurate['name']})")
-
-            # Difficulty comparison
-            highest_diff = max(types_data, key=lambda x: x["max_diff"])
-            lowest_diff = min(types_data, key=lambda x: x["max_diff"])
-            if highest_diff != lowest_diff:
-                st.markdown(f"**📈 Challenge Level:** You reached the highest difficulty level in {highest_diff['icon']} **{highest_diff['name']}** questions! "
-                           f"(Level {highest_diff['max_diff']} vs Level {lowest_diff['max_diff']} for {lowest_diff['icon']} {lowest_diff['name']})")
-
-            # Overall insights
-            st.write("")
-            if fastest == most_accurate:
-                st.markdown(f"💡 **Insight:** You excel at {fastest['icon']} **{fastest['name']}** - both fast AND accurate! Keep it up!")
-            elif slowest == most_accurate:
-                st.markdown(f"💡 **Insight:** You take your time with {slowest['icon']} **{slowest['name']}**, and it pays off with great accuracy!")
-            else:
-                st.markdown(f"💡 **Insight:** You have a balanced approach - fast at {fastest['icon']} **{fastest['name']}** and accurate at {most_accurate['icon']} **{most_accurate['name']}**!")
-
-        # --- SKILL BREAKDOWN ---
-        st.write("---")
-        st.markdown("### 🎯 Skills Breakdown")
-        skill_correct = st.session_state.get("skill_correct", {})
-        skill_total = st.session_state.get("skill_total", {})
-        skill_results = []
-        for code, name in SKILL_NAMES.items():
-            total = skill_total.get(code, 0)
-            correct = skill_correct.get(code, 0)
-            if total > 0:
-                pct = correct / total
-                skill_results.append((name, correct, total, pct))
-
-        if skill_results:
-            skill_results.sort(key=lambda x: x[3])  # sort weakest first
-            for name, correct, total, pct in skill_results:
+        for domain in READING_DOMAINS:
+            d_total = domain_total.get(domain, 0)
+            d_correct = domain_correct.get(domain, 0)
+            if d_total > 0:
+                pct = d_correct / d_total
                 bar_color = "#e74c3c" if pct < 0.5 else "#f39c12" if pct < 0.75 else "#27ae60"
-                label = "⚠️ Needs Work" if pct < 0.5 else "📈 Getting There" if pct < 0.75 else "✅ Strong"
-                st.markdown(f"**{name}** — {correct}/{total} ({pct*100:.0f}%) {label}")
+                label = "Needs Work" if pct < 0.5 else "Getting There" if pct < 0.75 else "Strong"
+                st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;**{domain}** — {d_correct}/{d_total} ({pct*100:.0f}%) _{label}_")
                 st.progress(pct)
+        st.write("")
 
-            # Weakest skill callout
-            weakest = skill_results[0]
-            if weakest[3] < 0.75:
-                st.info(f"💪 **Focus Area:** Practice more **{weakest[0]}** questions next session!")
+        # Math section
+        st.markdown(f"**🔢 Math — {math_correct}/{math_total if math_total > 0 else MATH_QUESTIONS} correct**")
+        if math_total > 0:
+            st.markdown(f"- Accuracy: {math_correct/math_total*100:.0f}%")
+            st.markdown(f"- Avg time: {math_time/math_total:.1f}s per question")
+            st.markdown(f"- Max difficulty: Level {st.session_state.max_difficulty_math}/10")
+        st.write("")
+
+        for domain in MATH_DOMAINS:
+            d_total = domain_total.get(domain, 0)
+            d_correct = domain_correct.get(domain, 0)
+            if d_total > 0:
+                pct = d_correct / d_total
+                label = "Needs Work" if pct < 0.5 else "Getting There" if pct < 0.75 else "Strong"
+                st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;**{domain}** — {d_correct}/{d_total} ({pct*100:.0f}%) _{label}_")
+                st.progress(pct)
+        st.write("")
+
+        # Weakest domain callout
+        all_results = []
+        for domain in ALL_DOMAINS:
+            d_total = domain_total.get(domain, 0)
+            d_correct = domain_correct.get(domain, 0)
+            if d_total > 0:
+                all_results.append((domain, d_correct/d_total))
+        if all_results:
+            weakest = min(all_results, key=lambda x: x[1])
+            if weakest[1] < 0.75:
+                st.info(f"💪 **Focus Area for Next Session:** {weakest[0]} ({weakest[1]*100:.0f}%)")
+
+        # Performance comparison
+        st.write("---")
+        st.markdown("### 📊 Performance Analysis")
+        st.write("")
+        if reading_total > 0 and math_total > 0:
+            r_pct = reading_correct / reading_total
+            m_pct = math_correct / math_total
+            if r_pct > m_pct:
+                st.markdown(f"**📚 Reading** is your stronger subject ({r_pct*100:.0f}% vs {m_pct*100:.0f}% Math)")
+            elif m_pct > r_pct:
+                st.markdown(f"**🔢 Math** is your stronger subject ({m_pct*100:.0f}% vs {r_pct*100:.0f}% Reading)")
+            else:
+                st.markdown(f"**Balanced performance!** Reading and Math both at {r_pct*100:.0f}%")
 
         st.write("")
         if st.button("Play Again", use_container_width=True):
@@ -1040,54 +734,35 @@ with col2:
             st.session_state.answered = False
             st.session_state.last_result = None
             st.session_state.show_results = False
-            st.session_state.skill_index = 0
             st.session_state.started = True
-            # Reset question type stats
-            st.session_state.correct_star_reading = 0
-            st.session_state.total_star_reading = 0
-            st.session_state.time_star_reading = 0.0
-            st.session_state.correct_star_renaissance = 0
-            st.session_state.total_star_renaissance = 0
-            st.session_state.time_star_renaissance = 0.0
-            st.session_state.correct_funed = 0
-            st.session_state.total_funed = 0
-            st.session_state.time_funed = 0.0
+            # Reset stats
+            st.session_state.correct_reading = 0
+            st.session_state.total_reading = 0
+            st.session_state.time_reading = 0.0
             st.session_state.correct_math = 0
             st.session_state.total_math = 0
             st.session_state.time_math = 0.0
             st.session_state.question_start_time = None
-            st.session_state.current_question_type = None
-            # Reset max difficulty per type
-            st.session_state.max_difficulty_star_reading = 5
-            st.session_state.max_difficulty_star_renaissance = 5
-            st.session_state.max_difficulty_funed = 5
+            st.session_state.current_subject = None
+            st.session_state.current_domain = None
+            st.session_state.max_difficulty_reading = 5
             st.session_state.max_difficulty_math = 5
-            # Reset used topics
             st.session_state.used_topics = []
-            # Reset skill tracking
-            st.session_state.skill_correct = {s: 0 for s in SKILL_NAMES}
-            st.session_state.skill_total = {s: 0 for s in SKILL_NAMES}
+            st.session_state.domain_correct = {d: 0 for d in ALL_DOMAINS}
+            st.session_state.domain_total = {d: 0 for d in ALL_DOMAINS}
             selected_interest = random.choice(st.session_state.interests)
-            selected_skill = SKILLS[st.session_state.skill_index]
-            if load_new_question(selected_interest, selected_skill):
+            if load_new_question(selected_interest):
                 st.rerun()
             else:
                 st.error("Could not generate question. Try again.")
     elif st.session_state.question_data:
         q = st.session_state.question_data
 
-        # Show current question type
-        qtype = st.session_state.current_question_type
-        if qtype == "STAR Reading":
-            type_icon = "📚"
-        elif qtype == "Star Renaissance":
-            type_icon = "🌟"
-        elif qtype == "Math":
-            type_icon = "🔢"
-        else:  # FunEd
-            type_icon = "🎮"
-
-        st.markdown(f"**{type_icon} {qtype}** - Question {st.session_state.question_count}/{TOTAL_QUESTIONS}")
+        # Show current subject and domain
+        subject = st.session_state.current_subject or ""
+        domain = st.session_state.current_domain or ""
+        type_icon = "📚" if subject == "Reading" else "🔢"
+        st.markdown(f"**{type_icon} {domain}** — Question {st.session_state.question_count}/{TOTAL_QUESTIONS}")
         st.write("")
         st.markdown(f"<div class='passage-box'>{q['passage']}</div>", unsafe_allow_html=True)
 
@@ -1121,44 +796,34 @@ with col2:
                     if st.session_state.question_start_time:
                         elapsed_time = time.time() - st.session_state.question_start_time
 
-                    # Update stats based on question type
-                    qtype = st.session_state.current_question_type
+                    # Update stats
+                    subj = st.session_state.current_subject
+                    dom = st.session_state.current_domain
                     is_correct = (letter == q["answer"])
 
-                    if qtype == "STAR Reading":
-                        st.session_state.total_star_reading += 1
-                        st.session_state.time_star_reading += elapsed_time
+                    if subj == "Reading":
+                        st.session_state.total_reading += 1
+                        st.session_state.time_reading += elapsed_time
                         if is_correct:
-                            st.session_state.correct_star_reading += 1
-                    elif qtype == "Star Renaissance":
-                        st.session_state.total_star_renaissance += 1
-                        st.session_state.time_star_renaissance += elapsed_time
-                        if is_correct:
-                            st.session_state.correct_star_renaissance += 1
-                    elif qtype == "FunEd":
-                        st.session_state.total_funed += 1
-                        st.session_state.time_funed += elapsed_time
-                        if is_correct:
-                            st.session_state.correct_funed += 1
-                    elif qtype == "Math":
+                            st.session_state.correct_reading += 1
+                    elif subj == "Math":
                         st.session_state.total_math += 1
                         st.session_state.time_math += elapsed_time
                         if is_correct:
                             st.session_state.correct_math += 1
 
-                    # Track skill performance
-                    q_skill = q.get("skill", "")
-                    if q_skill in st.session_state.skill_total:
-                        st.session_state.skill_total[q_skill] += 1
+                    # Domain tracking
+                    if dom and dom in st.session_state.domain_total:
+                        st.session_state.domain_total[dom] += 1
                         if is_correct:
-                            st.session_state.skill_correct[q_skill] += 1
+                            st.session_state.domain_correct[dom] += 1
 
                     if is_correct:
                         st.session_state.correct += 1
-                        update_difficulty(True, qtype)
+                        update_difficulty(True, subj)
                         st.session_state.last_result = ("correct", letter, q)
                     else:
-                        update_difficulty(False, qtype)
+                        update_difficulty(False, subj)
                         st.session_state.last_result = ("wrong", letter, q)
                     st.rerun()
 
@@ -1174,8 +839,7 @@ with col2:
                     # Load new question FIRST, then clear state if successful
                     with st.spinner("Loading the next question..."):
                         selected_interest = random.choice(st.session_state.interests)
-                        selected_skill = SKILLS[st.session_state.skill_index]
-                        if load_new_question(selected_interest, selected_skill):
+                        if load_new_question(selected_interest):
                             # Only clear state after successful load
                             st.session_state.answered = False
                             st.session_state.last_result = None
@@ -1192,4 +856,4 @@ with col2:
                 st.markdown(f"<div class='wrong-box'>❌ Not quite. Correct answer: {q['answer']}. {q['explanation']}</div>", unsafe_allow_html=True)
     else:
         st.markdown("### 👈 Pick your interests and click Let's Go to start")
-        st.markdown("Passages will be written around Ediz's interests at the right difficulty level.")
+        st.markdown("Passages will be written around your interests at the right difficulty level.")
