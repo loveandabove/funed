@@ -7,7 +7,7 @@ import json
 import traceback
 
 # --- VERSION ---
-VERSION = "2.2"  # May 5, 2026 - MAP Growth format: ELA/Math sessions, 25 questions, progress bar
+VERSION = "2.1"  # May 3, 2026 - Restructure to STAR Reading + STAR Math format
 
 # --- API KEY ---
 
@@ -39,23 +39,23 @@ client = Anthropic(api_key=API_KEY) if API_KEY else None
 # --- CONFIG ---
 INTERESTS = ["Minecraft", "Soccer", "Chess", "Space Travel"]
 
-ELA_DOMAINS = {
-    "Reading Comprehension": 5,
+READING_DOMAINS = {
     "Vocabulary in Context": 5,
-    "Literary Analysis": 5,
-    "Text Structure": 5,
-    "Argument & Evidence": 5,
+    "Main Idea / Central Theme": 3,
+    "Literary Analysis / Character": 3,
+    "Author's Craft / Figurative Language": 3,
+    "Argument & Evidence": 3,
 }
 
 MATH_DOMAINS = {
-    "Ratios & Proportions": 5,
-    "Fractions & Decimals": 5,
-    "Expressions & Equations": 5,
-    "Geometry": 5,
-    "Statistics & Data": 5,
+    "Numbers & Operations / Fractions": 4,
+    "Algebra / Expressions": 4,
+    "Geometry & Measurement": 3,
+    "Data Analysis": 3,
+    "Ratios & Proportions": 3,
 }
 
-ALL_DOMAINS = list(ELA_DOMAINS.keys()) + list(MATH_DOMAINS.keys())
+ALL_DOMAINS = list(READING_DOMAINS.keys()) + list(MATH_DOMAINS.keys())
 
 DIFFICULTY_MAP = {
     1:  "very simple, 2nd grade reading level, short sentences",
@@ -118,7 +118,7 @@ if client is None:
 
 # --- SESSION STATE ---
 if "difficulty" not in st.session_state:
-    st.session_state.difficulty = 3
+    st.session_state.difficulty = 5
 if "correct" not in st.session_state:
     st.session_state.correct = 0
 if "total" not in st.session_state:
@@ -135,27 +135,24 @@ if "student_name" not in st.session_state:
     st.session_state.student_name = ""
 if "pronoun" not in st.session_state:
     st.session_state.pronoun = ""
-TOTAL_QUESTIONS = 25
+TOTAL_QUESTIONS = 34
+READING_QUESTIONS = 17
+MATH_QUESTIONS = 17
 
 if "question_count" not in st.session_state:
     st.session_state.question_count = 0
 
-if "session_type" not in st.session_state:
-    st.session_state.session_type = None  # "ELA" or "Math"
-
-if "session_start_time" not in st.session_state:
-    st.session_state.session_start_time = None
-
-def generate_question_sequence(session_type="ELA"):
-    domains = ELA_DOMAINS if session_type == "ELA" else MATH_DOMAINS
+def generate_question_sequence():
     seq = []
-    for domain, count in domains.items():
-        seq.extend([{"subject": session_type, "domain": domain}] * count)
+    for domain, count in READING_DOMAINS.items():
+        seq.extend([{"subject": "Reading", "domain": domain}] * count)
+    for domain, count in MATH_DOMAINS.items():
+        seq.extend([{"subject": "Math", "domain": domain}] * count)
     random.shuffle(seq)
     return seq
 
 if "question_type_sequence" not in st.session_state:
-    st.session_state.question_type_sequence = generate_question_sequence("ELA")
+    st.session_state.question_type_sequence = generate_question_sequence()
 if "show_results" not in st.session_state:
     st.session_state.show_results = False
 if "started" not in st.session_state:
@@ -164,12 +161,12 @@ if "error_message" not in st.session_state:
     st.session_state.error_message = ""
 
 # Stats by subject
-if "correct_ela" not in st.session_state:
-    st.session_state.correct_ela = 0
-if "total_ela" not in st.session_state:
-    st.session_state.total_ela = 0
-if "time_ela" not in st.session_state:
-    st.session_state.time_ela = 0.0
+if "correct_reading" not in st.session_state:
+    st.session_state.correct_reading = 0
+if "total_reading" not in st.session_state:
+    st.session_state.total_reading = 0
+if "time_reading" not in st.session_state:
+    st.session_state.time_reading = 0.0
 if "correct_math" not in st.session_state:
     st.session_state.correct_math = 0
 if "total_math" not in st.session_state:
@@ -177,7 +174,7 @@ if "total_math" not in st.session_state:
 if "time_math" not in st.session_state:
     st.session_state.time_math = 0.0
 
-# Current question metadata
+# Current question timing and metadata
 if "question_start_time" not in st.session_state:
     st.session_state.question_start_time = None
 if "current_subject" not in st.session_state:
@@ -186,10 +183,10 @@ if "current_domain" not in st.session_state:
     st.session_state.current_domain = None
 
 # Max difficulty reached per subject
-if "max_difficulty_ela" not in st.session_state:
-    st.session_state.max_difficulty_ela = 3
+if "max_difficulty_reading" not in st.session_state:
+    st.session_state.max_difficulty_reading = 5
 if "max_difficulty_math" not in st.session_state:
-    st.session_state.max_difficulty_math = 3
+    st.session_state.max_difficulty_math = 5
 
 # Track used topics to avoid repetition
 if "used_topics" not in st.session_state:
@@ -229,40 +226,41 @@ def build_reading_prompt(interest, difficulty, domain, student_name="", pronoun=
         topic_restriction = ""
 
     domain_guidance = {
-        "Reading Comprehension": (
-            "Focus: reading comprehension\n"
-            "- Write a passage with clear events, setting, and characters\n"
-            "- Question tests understanding of what happened, why, or what it means\n"
-            "- Use inference stems: 'most likely', 'best supported by', 'primarily suggests'\n"
-            "- Wrong answers: plausible misreadings, partial truths, or reversed logic"
-        ),
         "Vocabulary in Context": (
             "Focus: vocabulary in context\n"
-            "- Choose 1-2 challenging words students can infer from context clues\n"
+            "- Choose 1-2 challenging words in the passage that students can infer from context\n"
             "- Question: 'As used in the passage, the word ___ most nearly means...'\n"
             "- Correct answer: meaning derived from context, NOT dictionary definition\n"
-            "- Wrong answers: other real meanings of the word that don't fit context"
+            "- Wrong answers: other real meanings of the word that don't fit this context"
         ),
-        "Literary Analysis": (
-            "Focus: literary analysis and character\n"
+        "Main Idea / Central Theme": (
+            "Focus: main idea or central theme\n"
+            "- Passage should develop one clear central idea or theme\n"
+            "- Question: 'What is the central idea/theme?' or 'How does the author develop the theme of...?'\n"
+            "- Correct answer: paraphrases the theme using inference\n"
+            "- Wrong answers: supporting details mistaken for main idea, or overly broad/narrow statements"
+        ),
+        "Literary Analysis / Character": (
+            "Focus: character development and analysis\n"
             "- Create a character who changes, faces conflict, or reveals traits through actions\n"
             "- Question: 'How does [character]'s behavior reveal...?' or 'What does [event] suggest about [character]?'\n"
             "- Use inference stems: 'most likely', 'primarily suggests', 'best supported by'\n"
-            "- Wrong answers: reverses character logic, uses passage words with wrong meaning"
+            "- Wrong answers: reverses character logic, uses passage words with wrong meaning, or only partially correct"
         ),
-        "Text Structure": (
-            "Focus: text structure and author's craft\n"
-            "- Use a clear organizational structure: chronological, cause-effect, problem-solution, or compare-contrast\n"
-            "- Include at least one figurative device: metaphor, simile, personification, or hyperbole\n"
-            "- Question: 'How does the author organize the text?' or 'What does the phrase [X] suggest?'\n"
-            "- Wrong answers: incorrect structure identification, or literal interpretation of figurative language"
+        "Author's Craft / Figurative Language": (
+            "Focus: figurative language, tone, author's craft\n"
+            "- Include at least one clear figurative device: metaphor, simile, personification, hyperbole, or idiom\n"
+            "- Question: 'What does the phrase [X] suggest?' or 'The author uses [device] to...'\n"
+            "- Correct answer: interprets the meaning/effect, does NOT repeat the literal words\n"
+            "- Wrong answers: literal interpretation, or effect on wrong element"
         ),
         "Argument & Evidence": (
-            "Focus: argument and evidence\n"
-            "- Write a short argumentative passage with a clear claim and supporting evidence\n"
+            "Focus: argument, claim, and evidence\n"
+            "- Write a short argumentative or informational passage with a clear claim\n"
+            "- Include at least 2 pieces of supporting evidence\n"
             "- Question: 'Which evidence best supports the claim?' or 'What weakens the argument?'\n"
             "- Correct answer: strongest/most relevant evidence\n"
-            "- Wrong answers: irrelevant facts, contradictory evidence, off-topic details"
+            "- Wrong answers: irrelevant facts, contradictory evidence, or details that don't support the claim"
         ),
     }
 
@@ -435,8 +433,6 @@ def load_new_question(interest):
         st.session_state.current_subject = subject
         st.session_state.current_domain = domain
         st.session_state.question_start_time = time.time()
-        if st.session_state.session_start_time is None:
-            st.session_state.session_start_time = time.time()
 
         if "topic" in data and data["topic"]:
             if "used_topics" not in st.session_state:
@@ -470,10 +466,7 @@ if not st.session_state.started:
             "Gaming": st.checkbox("Gaming", key="interest_gaming"),
         }
         st.write("")
-        st.markdown("### Choose your session")
-        session_type_input = st.radio("Session Type", ["ELA (Reading)", "Math"], label_visibility="collapsed", horizontal=True)
-        st.write("")
-        start_pressed = st.form_submit_button("Start Session", use_container_width=True)
+        start_pressed = st.form_submit_button("Let's Go!", use_container_width=True)
 
     if start_pressed:
         selected = [name for name, value in likes.items() if value]
@@ -498,9 +491,6 @@ if not st.session_state.started:
         else:  # Girl
             st.session_state.pronoun = "she/her"
 
-        session_type = "ELA" if session_type_input == "ELA (Reading)" else "Math"
-        st.session_state.session_type = session_type
-
         # Store interests
         if selected:
             st.session_state.interests = selected
@@ -509,24 +499,20 @@ if not st.session_state.started:
             st.session_state.last_result = None
             st.session_state.show_results = False
             st.session_state.question_count = 0
-            st.session_state.question_type_sequence = generate_question_sequence(session_type)
+            st.session_state.question_type_sequence = generate_question_sequence()
             st.session_state.error_message = ""
-            st.session_state.difficulty = 3
-            st.session_state.correct = 0
-            st.session_state.total = 0
-            st.session_state.session_start_time = None
             # Reset stats
-            st.session_state.correct_ela = 0
-            st.session_state.total_ela = 0
-            st.session_state.time_ela = 0.0
+            st.session_state.correct_reading = 0
+            st.session_state.total_reading = 0
+            st.session_state.time_reading = 0.0
             st.session_state.correct_math = 0
             st.session_state.total_math = 0
             st.session_state.time_math = 0.0
             st.session_state.question_start_time = None
             st.session_state.current_subject = None
             st.session_state.current_domain = None
-            st.session_state.max_difficulty_ela = 3
-            st.session_state.max_difficulty_math = 3
+            st.session_state.max_difficulty_reading = 5
+            st.session_state.max_difficulty_math = 5
             st.session_state.used_topics = []
             st.session_state.domain_correct = {d: 0 for d in ALL_DOMAINS}
             st.session_state.domain_total = {d: 0 for d in ALL_DOMAINS}
@@ -554,9 +540,9 @@ def update_difficulty(correct, subject=None):
 
     if subject:
         current_diff = st.session_state.difficulty
-        if subject == "ELA":
-            st.session_state.max_difficulty_ela = max(
-                st.session_state.max_difficulty_ela, current_diff
+        if subject == "Reading":
+            st.session_state.max_difficulty_reading = max(
+                st.session_state.max_difficulty_reading, current_diff
             )
         elif subject == "Math":
             st.session_state.max_difficulty_math = max(
@@ -571,25 +557,8 @@ st.write("---")
 col1, col2 = st.columns([1, 2.5])
 
 with col1:
-    st.markdown("### Session")
-    session_type = st.session_state.get("session_type", "ELA")
-    st.markdown(f"**{'📚 ELA' if session_type == 'ELA' else '🔢 Math'} Session**")
+    st.markdown("### Settings")
     st.write("")
-
-    # Progress bar
-    q_count = st.session_state.question_count
-    st.markdown(f"**Progress: {q_count}/{TOTAL_QUESTIONS}**")
-    st.progress(q_count / TOTAL_QUESTIONS if TOTAL_QUESTIONS > 0 else 0)
-    st.write("")
-
-    # Elapsed time
-    if st.session_state.session_start_time:
-        elapsed = int(time.time() - st.session_state.session_start_time)
-        mins, secs = divmod(elapsed, 60)
-        st.markdown(f"**Time: {mins:02d}:{secs:02d}**")
-        st.write("")
-
-    # Difficulty
     st.markdown("<div class='diff-label'>Difficulty Level</div>", unsafe_allow_html=True)
     st.progress(st.session_state.difficulty / 10)
     st.markdown(f"**Level {st.session_state.difficulty}/10**")
@@ -600,30 +569,29 @@ with col1:
     # Only show Reset Session button when NOT on results screen
     if not st.session_state.show_results:
         if st.button("🔄 Reset Session", use_container_width=True):
-            session_type = st.session_state.get("session_type", "ELA")
-            st.session_state.difficulty = 3
+            st.session_state.difficulty = 5
             st.session_state.correct = 0
             st.session_state.total = 0
             st.session_state.question_count = 0
-            st.session_state.question_type_sequence = generate_question_sequence(session_type)
+            st.session_state.question_type_sequence = generate_question_sequence()
             st.session_state.question_data = None
             st.session_state.answered = False
             st.session_state.last_result = None
             st.session_state.show_results = False
             st.session_state.interests = []
             st.session_state.started = False
-            st.session_state.session_start_time = None
-            st.session_state.correct_ela = 0
-            st.session_state.total_ela = 0
-            st.session_state.time_ela = 0.0
+            # Reset stats
+            st.session_state.correct_reading = 0
+            st.session_state.total_reading = 0
+            st.session_state.time_reading = 0.0
             st.session_state.correct_math = 0
             st.session_state.total_math = 0
             st.session_state.time_math = 0.0
             st.session_state.question_start_time = None
             st.session_state.current_subject = None
             st.session_state.current_domain = None
-            st.session_state.max_difficulty_ela = 3
-            st.session_state.max_difficulty_math = 3
+            st.session_state.max_difficulty_reading = 5
+            st.session_state.max_difficulty_math = 5
             st.session_state.used_topics = []
             st.session_state.domain_correct = {d: 0 for d in ALL_DOMAINS}
             st.session_state.domain_total = {d: 0 for d in ALL_DOMAINS}
@@ -632,13 +600,13 @@ with col1:
 with col2:
     if st.session_state.show_results:
         score = st.session_state.correct
-        if score >= 23:
+        if score == 10:
             stars = 5
-        elif score >= 20:
+        elif score >= 9:
             stars = 4
-        elif score >= 17:
+        elif score >= 7:
             stars = 3
-        elif score >= 13:
+        elif score >= 5:
             stars = 2
         else:
             stars = 1
@@ -661,88 +629,127 @@ with col2:
             grade_level = "8th Grade"
             grade_emoji = "📚"
 
-        session_type = st.session_state.get("session_type", "ELA")
+        # Personalized greeting with student name
         student_name = st.session_state.get("student_name", "")
-
-        # Header
         if student_name:
-            st.markdown(f"### {student_name}'s {'ELA' if session_type == 'ELA' else 'Math'} Session Complete!")
+            st.markdown(f"### Great job, {student_name}! You completed {TOTAL_QUESTIONS} questions!")
         else:
-            st.markdown(f"### {'ELA' if session_type == 'ELA' else 'Math'} Session Complete!")
-
-        # Elapsed time
-        if st.session_state.session_start_time:
-            total_elapsed = int(time.time() - st.session_state.session_start_time)
-            mins, secs = divmod(total_elapsed, 60)
-            st.markdown(f"**Total Time: {mins:02d}:{secs:02d}**")
-
-        st.markdown(f"**Score: {score} / {TOTAL_QUESTIONS}**")
+            st.markdown(f"### Great job! You completed {TOTAL_QUESTIONS} questions!")
+        st.markdown(f"**Overall Score: {score} out of {TOTAL_QUESTIONS}!**")
         st.write("")
 
-        # MAP-style level display
-        st.markdown(f"## {grade_emoji} Level: **{grade_level}**")
-        st.markdown(f"*(Difficulty reached: Level {difficulty}/10)*")
+        # Display reading level prominently
+        st.markdown(f"## {grade_emoji} Your Reading Level: **{grade_level}**")
+        st.markdown(f"*(Difficulty Level {difficulty}/10)*")
         st.write("")
+
         st.markdown("**Rating:** " + "⭐" * stars)
+
         st.write("---")
 
-        # Domain breakdown
-        domain_correct = st.session_state.get("domain_correct", {})
-        domain_total = st.session_state.get("domain_total", {})
-        domains_to_show = ELA_DOMAINS if session_type == "ELA" else MATH_DOMAINS
-        icon = "📚" if session_type == "ELA" else "🔢"
-
-        st.markdown(f"### {icon} Domain Breakdown")
+        # Results by subject
+        st.markdown("### Results by Subject")
         st.write("")
 
-        all_results = []
-        for domain in domains_to_show:
+        reading_correct = st.session_state.correct_reading
+        reading_total = st.session_state.total_reading
+        reading_time = st.session_state.time_reading
+        math_correct = st.session_state.correct_math
+        math_total = st.session_state.total_math
+        math_time = st.session_state.time_math
+        domain_correct = st.session_state.get("domain_correct", {})
+        domain_total = st.session_state.get("domain_total", {})
+
+        # Reading section
+        st.markdown(f"**📚 Reading — {reading_correct}/{reading_total if reading_total > 0 else READING_QUESTIONS} correct**")
+        if reading_total > 0:
+            st.markdown(f"- Accuracy: {reading_correct/reading_total*100:.0f}%")
+            st.markdown(f"- Avg time: {reading_time/reading_total:.1f}s per question")
+            st.markdown(f"- Max difficulty: Level {st.session_state.max_difficulty_reading}/10")
+        st.write("")
+
+        for domain in READING_DOMAINS:
+            d_total = domain_total.get(domain, 0)
+            d_correct = domain_correct.get(domain, 0)
+            if d_total > 0:
+                pct = d_correct / d_total
+                bar_color = "#e74c3c" if pct < 0.5 else "#f39c12" if pct < 0.75 else "#27ae60"
+                label = "Needs Work" if pct < 0.5 else "Getting There" if pct < 0.75 else "Strong"
+                st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;**{domain}** — {d_correct}/{d_total} ({pct*100:.0f}%) _{label}_")
+                st.progress(pct)
+        st.write("")
+
+        # Math section
+        st.markdown(f"**🔢 Math — {math_correct}/{math_total if math_total > 0 else MATH_QUESTIONS} correct**")
+        if math_total > 0:
+            st.markdown(f"- Accuracy: {math_correct/math_total*100:.0f}%")
+            st.markdown(f"- Avg time: {math_time/math_total:.1f}s per question")
+            st.markdown(f"- Max difficulty: Level {st.session_state.max_difficulty_math}/10")
+        st.write("")
+
+        for domain in MATH_DOMAINS:
             d_total = domain_total.get(domain, 0)
             d_correct = domain_correct.get(domain, 0)
             if d_total > 0:
                 pct = d_correct / d_total
                 label = "Needs Work" if pct < 0.5 else "Getting There" if pct < 0.75 else "Strong"
-                st.markdown(f"**{domain}** — {d_correct}/{d_total} ({pct*100:.0f}%) _{label}_")
+                st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;**{domain}** — {d_correct}/{d_total} ({pct*100:.0f}%) _{label}_")
                 st.progress(pct)
-                all_results.append((domain, d_correct, d_total, pct))
-            else:
-                st.markdown(f"**{domain}** — 0/0")
         st.write("")
 
-        # Weakest domain
+        # Weakest domain callout
+        all_results = []
+        for domain in ALL_DOMAINS:
+            d_total = domain_total.get(domain, 0)
+            d_correct = domain_correct.get(domain, 0)
+            if d_total > 0:
+                all_results.append((domain, d_correct/d_total))
         if all_results:
-            weakest = min(all_results, key=lambda x: x[3])
-            if weakest[3] < 0.75:
-                st.info(f"💪 **Focus Area:** Practice more **{weakest[0]}** ({weakest[3]*100:.0f}%)")
+            weakest = min(all_results, key=lambda x: x[1])
+            if weakest[1] < 0.75:
+                st.info(f"💪 **Focus Area for Next Session:** {weakest[0]} ({weakest[1]*100:.0f}%)")
+
+        # Performance comparison
+        st.write("---")
+        st.markdown("### 📊 Performance Analysis")
+        st.write("")
+        if reading_total > 0 and math_total > 0:
+            r_pct = reading_correct / reading_total
+            m_pct = math_correct / math_total
+            if r_pct > m_pct:
+                st.markdown(f"**📚 Reading** is your stronger subject ({r_pct*100:.0f}% vs {m_pct*100:.0f}% Math)")
+            elif m_pct > r_pct:
+                st.markdown(f"**🔢 Math** is your stronger subject ({m_pct*100:.0f}% vs {r_pct*100:.0f}% Reading)")
+            else:
+                st.markdown(f"**Balanced performance!** Reading and Math both at {r_pct*100:.0f}%")
 
         st.write("")
         if st.button("Play Again", use_container_width=True):
             st.session_state.correct = 0
             st.session_state.total = 0
-            st.session_state.difficulty = 3
+            st.session_state.difficulty = 5
             st.session_state.question_count = 0
-            session_type = st.session_state.get("session_type", "ELA")
-            st.session_state.question_type_sequence = generate_question_sequence(session_type)
+            st.session_state.question_type_sequence = generate_question_sequence()
             st.session_state.question_data = None
             st.session_state.answered = False
             st.session_state.last_result = None
             st.session_state.show_results = False
-            st.session_state.session_start_time = None
-            st.session_state.correct_ela = 0
-            st.session_state.total_ela = 0
-            st.session_state.time_ela = 0.0
+            st.session_state.started = True
+            # Reset stats
+            st.session_state.correct_reading = 0
+            st.session_state.total_reading = 0
+            st.session_state.time_reading = 0.0
             st.session_state.correct_math = 0
             st.session_state.total_math = 0
             st.session_state.time_math = 0.0
             st.session_state.question_start_time = None
             st.session_state.current_subject = None
             st.session_state.current_domain = None
-            st.session_state.max_difficulty_ela = 3
-            st.session_state.max_difficulty_math = 3
+            st.session_state.max_difficulty_reading = 5
+            st.session_state.max_difficulty_math = 5
             st.session_state.used_topics = []
             st.session_state.domain_correct = {d: 0 for d in ALL_DOMAINS}
             st.session_state.domain_total = {d: 0 for d in ALL_DOMAINS}
-            st.session_state.started = True
             selected_interest = random.choice(st.session_state.interests)
             if load_new_question(selected_interest):
                 st.rerun()
@@ -754,7 +761,7 @@ with col2:
         # Show current subject and domain
         subject = st.session_state.current_subject or ""
         domain = st.session_state.current_domain or ""
-        type_icon = "📚" if subject == "ELA" else "🔢"
+        type_icon = "📚" if subject == "Reading" else "🔢"
         st.markdown(f"**{type_icon} {domain}** — Question {st.session_state.question_count}/{TOTAL_QUESTIONS}")
         st.write("")
         st.markdown(f"<div class='passage-box'>{q['passage']}</div>", unsafe_allow_html=True)
@@ -794,11 +801,11 @@ with col2:
                     dom = st.session_state.current_domain
                     is_correct = (letter == q["answer"])
 
-                    if subj == "ELA":
-                        st.session_state.total_ela += 1
-                        st.session_state.time_ela += elapsed_time
+                    if subj == "Reading":
+                        st.session_state.total_reading += 1
+                        st.session_state.time_reading += elapsed_time
                         if is_correct:
-                            st.session_state.correct_ela += 1
+                            st.session_state.correct_reading += 1
                     elif subj == "Math":
                         st.session_state.total_math += 1
                         st.session_state.time_math += elapsed_time
@@ -848,5 +855,5 @@ with col2:
             else:
                 st.markdown(f"<div class='wrong-box'>❌ Not quite. Correct answer: {q['answer']}. {q['explanation']}</div>", unsafe_allow_html=True)
     else:
-        st.markdown("### 👈 Pick your interests and click Start Session to begin")
+        st.markdown("### 👈 Pick your interests and click Let's Go to start")
         st.markdown("Passages will be written around your interests at the right difficulty level.")
