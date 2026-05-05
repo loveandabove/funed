@@ -7,7 +7,7 @@ import json
 import traceback
 
 # --- VERSION ---
-VERSION = "2.3"  # May 5, 2026 - MAP Growth: single mixed session, 40Q (20 ELA + 20 Math)
+VERSION = "2.2"  # May 5, 2026 - MAP Growth format: ELA/Math sessions, 25 questions, progress bar
 
 # --- API KEY ---
 
@@ -40,19 +40,19 @@ client = Anthropic(api_key=API_KEY) if API_KEY else None
 INTERESTS = ["Minecraft", "Soccer", "Chess", "Space Travel"]
 
 ELA_DOMAINS = {
-    "Reading Comprehension": 4,
-    "Vocabulary in Context": 4,
-    "Literary Analysis": 4,
-    "Text Structure": 4,
-    "Argument & Evidence": 4,
+    "Reading Comprehension": 5,
+    "Vocabulary in Context": 5,
+    "Literary Analysis": 5,
+    "Text Structure": 5,
+    "Argument & Evidence": 5,
 }
 
 MATH_DOMAINS = {
-    "Ratios & Proportions": 4,
-    "Fractions & Decimals": 4,
-    "Expressions & Equations": 4,
-    "Geometry": 4,
-    "Statistics & Data": 4,
+    "Ratios & Proportions": 5,
+    "Fractions & Decimals": 5,
+    "Expressions & Equations": 5,
+    "Geometry": 5,
+    "Statistics & Data": 5,
 }
 
 ALL_DOMAINS = list(ELA_DOMAINS.keys()) + list(MATH_DOMAINS.keys())
@@ -135,25 +135,27 @@ if "student_name" not in st.session_state:
     st.session_state.student_name = ""
 if "pronoun" not in st.session_state:
     st.session_state.pronoun = ""
-TOTAL_QUESTIONS = 40
+TOTAL_QUESTIONS = 25
 
 if "question_count" not in st.session_state:
     st.session_state.question_count = 0
 
+if "session_type" not in st.session_state:
+    st.session_state.session_type = None  # "ELA" or "Math"
+
 if "session_start_time" not in st.session_state:
     st.session_state.session_start_time = None
 
-def generate_question_sequence():
+def generate_question_sequence(session_type="ELA"):
+    domains = ELA_DOMAINS if session_type == "ELA" else MATH_DOMAINS
     seq = []
-    for domain, count in ELA_DOMAINS.items():
-        seq.extend([{"subject": "ELA", "domain": domain}] * count)
-    for domain, count in MATH_DOMAINS.items():
-        seq.extend([{"subject": "Math", "domain": domain}] * count)
+    for domain, count in domains.items():
+        seq.extend([{"subject": session_type, "domain": domain}] * count)
     random.shuffle(seq)
     return seq
 
 if "question_type_sequence" not in st.session_state:
-    st.session_state.question_type_sequence = generate_question_sequence()
+    st.session_state.question_type_sequence = generate_question_sequence("ELA")
 if "show_results" not in st.session_state:
     st.session_state.show_results = False
 if "started" not in st.session_state:
@@ -468,7 +470,10 @@ if not st.session_state.started:
             "Gaming": st.checkbox("Gaming", key="interest_gaming"),
         }
         st.write("")
-        start_pressed = st.form_submit_button("Let's Go!", use_container_width=True)
+        st.markdown("### Choose your session")
+        session_type_input = st.radio("Session Type", ["ELA (Reading)", "Math"], label_visibility="collapsed", horizontal=True)
+        st.write("")
+        start_pressed = st.form_submit_button("Start Session", use_container_width=True)
 
     if start_pressed:
         selected = [name for name, value in likes.items() if value]
@@ -493,6 +498,9 @@ if not st.session_state.started:
         else:  # Girl
             st.session_state.pronoun = "she/her"
 
+        session_type = "ELA" if session_type_input == "ELA (Reading)" else "Math"
+        st.session_state.session_type = session_type
+
         # Store interests
         if selected:
             st.session_state.interests = selected
@@ -501,7 +509,7 @@ if not st.session_state.started:
             st.session_state.last_result = None
             st.session_state.show_results = False
             st.session_state.question_count = 0
-            st.session_state.question_type_sequence = generate_question_sequence()
+            st.session_state.question_type_sequence = generate_question_sequence(session_type)
             st.session_state.error_message = ""
             st.session_state.difficulty = 3
             st.session_state.correct = 0
@@ -563,12 +571,14 @@ st.write("---")
 col1, col2 = st.columns([1, 2.5])
 
 with col1:
-    st.markdown("### Progress")
+    st.markdown("### Session")
+    session_type = st.session_state.get("session_type", "ELA")
+    st.markdown(f"**{'📚 ELA' if session_type == 'ELA' else '🔢 Math'} Session**")
     st.write("")
 
     # Progress bar
     q_count = st.session_state.question_count
-    st.markdown(f"**{q_count} / {TOTAL_QUESTIONS} questions**")
+    st.markdown(f"**Progress: {q_count}/{TOTAL_QUESTIONS}**")
     st.progress(q_count / TOTAL_QUESTIONS if TOTAL_QUESTIONS > 0 else 0)
     st.write("")
 
@@ -587,13 +597,15 @@ with col1:
     st.markdown(f"**Score:** {st.session_state.correct} / {st.session_state.total}")
     st.write("")
 
+    # Only show Reset Session button when NOT on results screen
     if not st.session_state.show_results:
         if st.button("🔄 Reset Session", use_container_width=True):
+            session_type = st.session_state.get("session_type", "ELA")
             st.session_state.difficulty = 3
             st.session_state.correct = 0
             st.session_state.total = 0
             st.session_state.question_count = 0
-            st.session_state.question_type_sequence = generate_question_sequence()
+            st.session_state.question_type_sequence = generate_question_sequence(session_type)
             st.session_state.question_data = None
             st.session_state.answered = False
             st.session_state.last_result = None
@@ -620,13 +632,13 @@ with col1:
 with col2:
     if st.session_state.show_results:
         score = st.session_state.correct
-        if score >= 37:
+        if score >= 23:
             stars = 5
-        elif score >= 32:
-            stars = 4
-        elif score >= 27:
-            stars = 3
         elif score >= 20:
+            stars = 4
+        elif score >= 17:
+            stars = 3
+        elif score >= 13:
             stars = 2
         else:
             stars = 1
@@ -649,13 +661,14 @@ with col2:
             grade_level = "8th Grade"
             grade_emoji = "📚"
 
+        session_type = st.session_state.get("session_type", "ELA")
         student_name = st.session_state.get("student_name", "")
 
         # Header
         if student_name:
-            st.markdown(f"### Great job, {student_name}! Session Complete!")
+            st.markdown(f"### {student_name}'s {'ELA' if session_type == 'ELA' else 'Math'} Session Complete!")
         else:
-            st.markdown(f"### Session Complete!")
+            st.markdown(f"### {'ELA' if session_type == 'ELA' else 'Math'} Session Complete!")
 
         # Elapsed time
         if st.session_state.session_start_time:
@@ -666,26 +679,24 @@ with col2:
         st.markdown(f"**Score: {score} / {TOTAL_QUESTIONS}**")
         st.write("")
 
+        # MAP-style level display
         st.markdown(f"## {grade_emoji} Level: **{grade_level}**")
         st.markdown(f"*(Difficulty reached: Level {difficulty}/10)*")
         st.write("")
         st.markdown("**Rating:** " + "⭐" * stars)
         st.write("---")
 
+        # Domain breakdown
         domain_correct = st.session_state.get("domain_correct", {})
         domain_total = st.session_state.get("domain_total", {})
+        domains_to_show = ELA_DOMAINS if session_type == "ELA" else MATH_DOMAINS
+        icon = "📚" if session_type == "ELA" else "🔢"
 
-        ela_correct = st.session_state.correct_ela
-        ela_total = st.session_state.total_ela
-        math_correct = st.session_state.correct_math
-        math_total = st.session_state.total_math
-
-        # ELA section
-        ela_pct = f"{ela_correct/ela_total*100:.0f}%" if ela_total > 0 else "—"
-        st.markdown(f"### 📚 ELA — {ela_correct}/{ela_total} ({ela_pct})")
+        st.markdown(f"### {icon} Domain Breakdown")
         st.write("")
-        ela_results = []
-        for domain in ELA_DOMAINS:
+
+        all_results = []
+        for domain in domains_to_show:
             d_total = domain_total.get(domain, 0)
             d_correct = domain_correct.get(domain, 0)
             if d_total > 0:
@@ -693,35 +704,16 @@ with col2:
                 label = "Needs Work" if pct < 0.5 else "Getting There" if pct < 0.75 else "Strong"
                 st.markdown(f"**{domain}** — {d_correct}/{d_total} ({pct*100:.0f}%) _{label}_")
                 st.progress(pct)
-                ela_results.append((domain, pct))
+                all_results.append((domain, d_correct, d_total, pct))
             else:
                 st.markdown(f"**{domain}** — 0/0")
         st.write("")
 
-        # Math section
-        math_pct = f"{math_correct/math_total*100:.0f}%" if math_total > 0 else "—"
-        st.markdown(f"### 🔢 Math — {math_correct}/{math_total} ({math_pct})")
-        st.write("")
-        math_results = []
-        for domain in MATH_DOMAINS:
-            d_total = domain_total.get(domain, 0)
-            d_correct = domain_correct.get(domain, 0)
-            if d_total > 0:
-                pct = d_correct / d_total
-                label = "Needs Work" if pct < 0.5 else "Getting There" if pct < 0.75 else "Strong"
-                st.markdown(f"**{domain}** — {d_correct}/{d_total} ({pct*100:.0f}%) _{label}_")
-                st.progress(pct)
-                math_results.append((domain, pct))
-            else:
-                st.markdown(f"**{domain}** — 0/0")
-        st.write("")
-
-        # Weakest areas
-        all_results = ela_results + math_results
+        # Weakest domain
         if all_results:
-            weakest = min(all_results, key=lambda x: x[1])
-            if weakest[1] < 0.75:
-                st.info(f"💪 **Focus Area:** {weakest[0]} ({weakest[1]*100:.0f}%)")
+            weakest = min(all_results, key=lambda x: x[3])
+            if weakest[3] < 0.75:
+                st.info(f"💪 **Focus Area:** Practice more **{weakest[0]}** ({weakest[3]*100:.0f}%)")
 
         st.write("")
         if st.button("Play Again", use_container_width=True):
@@ -729,7 +721,8 @@ with col2:
             st.session_state.total = 0
             st.session_state.difficulty = 3
             st.session_state.question_count = 0
-            st.session_state.question_type_sequence = generate_question_sequence()
+            session_type = st.session_state.get("session_type", "ELA")
+            st.session_state.question_type_sequence = generate_question_sequence(session_type)
             st.session_state.question_data = None
             st.session_state.answered = False
             st.session_state.last_result = None
