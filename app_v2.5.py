@@ -7,7 +7,7 @@ import json
 import traceback
 
 # --- VERSION ---
-VERSION = "2.6"  # May 5, 2026 - Move strategy tip to wrong-answer explanation screen
+VERSION = "2.5"  # May 5, 2026 - Add optional reading strategy hint per question
 
 # --- API KEY ---
 
@@ -766,6 +766,24 @@ with col2:
         st.write("")
         st.markdown(f"<div class='passage-box'>{q['passage']}</div>", unsafe_allow_html=True)
 
+        # Strategy hint
+        HINTS = {
+            "Reading Comprehension":    "Tip: Check the first and last sentences of the passage.",
+            "Main Idea / Central Theme": "Tip: Check the first and last sentences of the passage.",
+            "Vocabulary in Context":    "Tip: Find the word in the passage and read the sentences around it.",
+            "Literary Analysis":        "Tip: Look for what the character does or says, not just thinks.",
+            "Text Structure":           "Tip: Look for signal words like 'because', 'however', 'first', 'finally'.",
+            "Argument & Evidence":      "Tip: Find the author's main claim first, then look for supporting details.",
+            "Ratios & Proportions":     "Tip: Read the problem twice before calculating.",
+            "Fractions & Decimals":     "Tip: Read the problem twice before calculating.",
+            "Expressions & Equations":  "Tip: Read the problem twice before calculating.",
+            "Geometry":                 "Tip: Read the problem twice before calculating.",
+            "Statistics & Data":        "Tip: Read the problem twice before calculating.",
+        }
+        hint = HINTS.get(domain, "Tip: Read the question carefully before choosing an answer.")
+        with st.expander("💡 Hint", expanded=False):
+            st.markdown(hint)
+
         # Display vocabulary if available
         if "vocabulary" in q and q["vocabulary"]:
             st.write("")
@@ -853,22 +871,7 @@ with col2:
             if result == "correct":
                 st.markdown(f"<div class='correct-box'>✅ Correct! {q['explanation']}</div>", unsafe_allow_html=True)
             else:
-                STRATEGY_TIPS = {
-                    "Reading Comprehension":    "Check the first and last sentences of the passage.",
-                    "Main Idea / Central Theme": "Check the first and last sentences of the passage.",
-                    "Vocabulary in Context":    "Find the word in the passage and read the sentences around it.",
-                    "Literary Analysis":        "Look for what the character does or says, not just thinks.",
-                    "Text Structure":           "Look for signal words like 'because', 'however', 'first', 'finally'.",
-                    "Argument & Evidence":      "Find the author's main claim first, then look for supporting details.",
-                    "Ratios & Proportions":     "Read the problem twice before calculating.",
-                    "Fractions & Decimals":     "Read the problem twice before calculating.",
-                    "Expressions & Equations":  "Read the problem twice before calculating.",
-                    "Geometry":                 "Read the problem twice before calculating.",
-                    "Statistics & Data":        "Read the problem twice before calculating.",
-                }
-                current_domain = st.session_state.get("current_domain", "")
-                tip = STRATEGY_TIPS.get(current_domain, "Read the question carefully before choosing an answer.")
-                st.markdown(f"<div class='wrong-box'>❌ Not quite. Correct answer: {q['answer']}. {q['explanation']}<br><br>📌 <strong>Strategy tip:</strong> {tip}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='wrong-box'>❌ Not quite. Correct answer: {q['answer']}. {q['explanation']}</div>", unsafe_allow_html=True)
     else:
         st.markdown("### 👈 Pick your interests and click Start Session to begin")
         st.markdown("Passages will be written around your interests at the right difficulty level.")
