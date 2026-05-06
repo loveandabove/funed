@@ -7,10 +7,7 @@ import json
 import traceback
 
 # --- VERSION ---
-VERSION = "2.7"  # May 6, 2026 - Session selector (Reading/Math), continuous save, View Report button
-
-# --- PROGRESS FILE ---
-PROGRESS_FILE = "session_progress.json"
+VERSION = "2.6"  # May 5, 2026 - Move strategy tip to wrong-answer explanation screen
 
 # --- API KEY ---
 
@@ -59,8 +56,6 @@ MATH_DOMAINS = {
 }
 
 ALL_DOMAINS = list(ELA_DOMAINS.keys()) + list(MATH_DOMAINS.keys())
-
-TOTAL_QUESTIONS = 20
 
 DIFFICULTY_MAP = {
     1:  "very simple, 2nd grade reading level, short sentences",
@@ -121,70 +116,6 @@ if client is None:
     st.error("Missing Anthropic API key. Set ANTHROPIC_API_KEY or CLAUDE_API_KEY in your environment, or add it to a .env file.")
     st.stop()
 
-# --- PROGRESS PERSISTENCE ---
-def save_progress_snapshot():
-    data = {
-        "student_name": st.session_state.get("student_name", ""),
-        "session_mode": st.session_state.get("session_mode", ""),
-        "interests": st.session_state.get("interests", []),
-        "question_count": st.session_state.get("question_count", 0),
-        "correct": st.session_state.get("correct", 0),
-        "total": st.session_state.get("total", 0),
-        "correct_ela": st.session_state.get("correct_ela", 0),
-        "total_ela": st.session_state.get("total_ela", 0),
-        "correct_math": st.session_state.get("correct_math", 0),
-        "total_math": st.session_state.get("total_math", 0),
-        "domain_correct": st.session_state.get("domain_correct", {}),
-        "domain_total": st.session_state.get("domain_total", {}),
-        "difficulty": st.session_state.get("difficulty", 3),
-        "max_difficulty_ela": st.session_state.get("max_difficulty_ela", 3),
-        "max_difficulty_math": st.session_state.get("max_difficulty_math", 3),
-        "session_start_time": st.session_state.get("session_start_time"),
-    }
-    try:
-        with open(PROGRESS_FILE, "w") as f:
-            json.dump(data, f)
-    except Exception:
-        pass
-
-
-def load_progress_snapshot():
-    try:
-        if os.path.exists(PROGRESS_FILE):
-            with open(PROGRESS_FILE, "r") as f:
-                return json.load(f)
-    except Exception:
-        pass
-    return None
-
-
-def clear_progress_snapshot():
-    try:
-        if os.path.exists(PROGRESS_FILE):
-            os.remove(PROGRESS_FILE)
-    except Exception:
-        pass
-
-
-def restore_snapshot_to_state(snap):
-    st.session_state.student_name = snap.get("student_name", "")
-    st.session_state.session_mode = snap.get("session_mode", "")
-    st.session_state.interests = snap.get("interests", [])
-    st.session_state.question_count = snap.get("question_count", 0)
-    st.session_state.correct = snap.get("correct", 0)
-    st.session_state.total = snap.get("total", 0)
-    st.session_state.correct_ela = snap.get("correct_ela", 0)
-    st.session_state.total_ela = snap.get("total_ela", 0)
-    st.session_state.correct_math = snap.get("correct_math", 0)
-    st.session_state.total_math = snap.get("total_math", 0)
-    st.session_state.domain_correct = snap.get("domain_correct", {d: 0 for d in ALL_DOMAINS})
-    st.session_state.domain_total = snap.get("domain_total", {d: 0 for d in ALL_DOMAINS})
-    st.session_state.difficulty = snap.get("difficulty", 3)
-    st.session_state.max_difficulty_ela = snap.get("max_difficulty_ela", 3)
-    st.session_state.max_difficulty_math = snap.get("max_difficulty_math", 3)
-    st.session_state.session_start_time = snap.get("session_start_time")
-
-
 # --- SESSION STATE ---
 if "difficulty" not in st.session_state:
     st.session_state.difficulty = 3
@@ -204,33 +135,25 @@ if "student_name" not in st.session_state:
     st.session_state.student_name = ""
 if "pronoun" not in st.session_state:
     st.session_state.pronoun = ""
-if "session_mode" not in st.session_state:
-    st.session_state.session_mode = ""  # "ELA" or "Math"
-if "show_mode_selector" not in st.session_state:
-    st.session_state.show_mode_selector = False
-if "dismissed_snapshot" not in st.session_state:
-    st.session_state.dismissed_snapshot = False
+TOTAL_QUESTIONS = 40
 
 if "question_count" not in st.session_state:
     st.session_state.question_count = 0
+
 if "session_start_time" not in st.session_state:
     st.session_state.session_start_time = None
 
-
-def generate_question_sequence(mode="ELA"):
+def generate_question_sequence():
     seq = []
-    if mode == "ELA":
-        for domain, count in ELA_DOMAINS.items():
-            seq.extend([{"subject": "ELA", "domain": domain}] * count)
-    else:  # Math
-        for domain, count in MATH_DOMAINS.items():
-            seq.extend([{"subject": "Math", "domain": domain}] * count)
+    for domain, count in ELA_DOMAINS.items():
+        seq.extend([{"subject": "ELA", "domain": domain}] * count)
+    for domain, count in MATH_DOMAINS.items():
+        seq.extend([{"subject": "Math", "domain": domain}] * count)
     random.shuffle(seq)
     return seq
 
-
 if "question_type_sequence" not in st.session_state:
-    st.session_state.question_type_sequence = generate_question_sequence("ELA")
+    st.session_state.question_type_sequence = generate_question_sequence()
 if "show_results" not in st.session_state:
     st.session_state.show_results = False
 if "started" not in st.session_state:
@@ -396,10 +319,6 @@ def build_math_prompt(interest, difficulty, domain):
         "Geometry & Measurement": "area, perimeter, volume, angles, or coordinate geometry",
         "Data Analysis": "reading graphs, calculating mean/median/mode/range, or interpreting data",
         "Ratios & Proportions": "ratios, proportions, percentages, and unit rates",
-        "Fractions & Decimals": "fractions, decimals, and operations with rational numbers",
-        "Expressions & Equations": "algebraic expressions, equations, and solving for unknowns",
-        "Geometry": "area, perimeter, volume, angles, or coordinate geometry",
-        "Statistics & Data": "reading graphs, calculating mean/median/mode/range, or interpreting data",
     }
 
     guidance = domain_guidance.get(domain, "general math problem")
@@ -525,114 +444,11 @@ def load_new_question(interest):
         return True
     return False
 
-
-def reset_session_state(keep_profile=False):
-    st.session_state.difficulty = 3
-    st.session_state.correct = 0
-    st.session_state.total = 0
-    st.session_state.question_count = 0
-    st.session_state.question_data = None
-    st.session_state.answered = False
-    st.session_state.last_result = None
-    st.session_state.show_results = False
-    st.session_state.session_start_time = None
-    st.session_state.correct_ela = 0
-    st.session_state.total_ela = 0
-    st.session_state.time_ela = 0.0
-    st.session_state.correct_math = 0
-    st.session_state.total_math = 0
-    st.session_state.time_math = 0.0
-    st.session_state.question_start_time = None
-    st.session_state.current_subject = None
-    st.session_state.current_domain = None
-    st.session_state.max_difficulty_ela = 3
-    st.session_state.max_difficulty_math = 3
-    st.session_state.used_topics = []
-    st.session_state.domain_correct = {d: 0 for d in ALL_DOMAINS}
-    st.session_state.domain_total = {d: 0 for d in ALL_DOMAINS}
-    if not keep_profile:
-        st.session_state.interests = []
-        st.session_state.started = False
-        st.session_state.student_name = ""
-        st.session_state.pronoun = ""
-        st.session_state.session_mode = ""
-        st.session_state.show_mode_selector = False
-    clear_progress_snapshot()
-
-
-# --- ONBOARDING ---
 if not st.session_state.started:
     st.markdown("# ⭐ FUN ED")
     st.markdown("*Your adventure-filled learning world*")
     st.write("---")
 
-    # Check for saved progress from a previous session
-    snapshot = load_progress_snapshot()
-    if snapshot and snapshot.get("question_count", 0) > 0 and not st.session_state.dismissed_snapshot:
-        snap_name = snapshot.get("student_name", "Unknown")
-        snap_q = snapshot.get("question_count", 0)
-        snap_mode = snapshot.get("session_mode", "")
-        mode_label = "📚 Reading" if snap_mode == "ELA" else "🔢 Math" if snap_mode == "Math" else ""
-        st.info(f"📋 **Previous session found** — {snap_name}, {mode_label}, {snap_q}/{TOTAL_QUESTIONS} questions completed")
-        col_snap_a, col_snap_b = st.columns(2)
-        with col_snap_a:
-            if st.button("📊 View Previous Report", use_container_width=True):
-                restore_snapshot_to_state(snapshot)
-                st.session_state.show_results = True
-                st.session_state.started = True
-                st.session_state.question_data = None
-                st.session_state.answered = False
-                st.session_state.last_result = None
-                st.rerun()
-        with col_snap_b:
-            if st.button("🆕 Start New Session", use_container_width=True):
-                st.session_state.dismissed_snapshot = True
-                clear_progress_snapshot()
-                st.rerun()
-        st.stop()
-
-    # Session mode selector (shown after onboarding form is submitted)
-    if st.session_state.show_mode_selector:
-        student_name = st.session_state.get("student_name", "")
-        if student_name:
-            st.markdown(f"### Hi {student_name}! Choose your session:")
-        else:
-            st.markdown("### Choose your session:")
-        st.write("")
-        col_ela, col_math = st.columns(2)
-        with col_ela:
-            st.markdown("#### 📚 Reading")
-            st.markdown("20 ELA questions — comprehension, vocabulary, literary analysis")
-            if st.button("Start Reading Session", use_container_width=True, key="btn_ela"):
-                st.session_state.session_mode = "ELA"
-                st.session_state.question_type_sequence = generate_question_sequence("ELA")
-                with st.spinner("Generating your first question..."):
-                    selected_interest = random.choice(st.session_state.interests)
-                    if load_new_question(selected_interest):
-                        st.session_state.started = True
-                        st.session_state.show_mode_selector = False
-                        st.session_state.dismissed_snapshot = False
-                        st.rerun()
-                    else:
-                        st.error("Could not generate a question. Please try again.")
-        with col_math:
-            st.markdown("#### 🔢 Math")
-            st.markdown("20 Math questions — ratios, fractions, equations, geometry")
-            if st.button("Start Math Session", use_container_width=True, key="btn_math"):
-                st.session_state.session_mode = "Math"
-                st.session_state.question_type_sequence = generate_question_sequence("Math")
-                with st.spinner("Generating your first question..."):
-                    selected_interest = random.choice(st.session_state.interests)
-                    if load_new_question(selected_interest):
-                        st.session_state.started = True
-                        st.session_state.show_mode_selector = False
-                        st.session_state.dismissed_snapshot = False
-                        st.rerun()
-                    else:
-                        st.error("Could not generate a question. Please try again.")
-        st.stop()
-
-    # Onboarding form
     with st.form("onboarding_form"):
         st.markdown("### What's your name?")
         student_name_input = st.text_input("Name", placeholder="Enter your name", label_visibility="collapsed")
@@ -657,9 +473,12 @@ if not st.session_state.started:
     if start_pressed:
         selected = [name for name, value in likes.items() if value]
 
+        # Validation: Check if name is provided
         if not student_name_input or student_name_input.strip() == "":
             st.error("Please enter your name!")
             st.stop()
+
+        # Validation: Check if interests are selected and not more than 3
         if not selected:
             st.error("Please select at least one interest!")
             st.stop()
@@ -667,12 +486,51 @@ if not st.session_state.started:
             st.warning("⚠️ Please choose maximum 3 interests!")
             st.stop()
 
+        # Store student name and pronoun
         st.session_state.student_name = student_name_input.strip()
-        st.session_state.pronoun = "he/him" if gender == "Boy" else "she/her"
-        st.session_state.interests = selected
-        reset_session_state(keep_profile=True)
-        st.session_state.show_mode_selector = True
-        st.rerun()
+        if gender == "Boy":
+            st.session_state.pronoun = "he/him"
+        else:  # Girl
+            st.session_state.pronoun = "she/her"
+
+        # Store interests
+        if selected:
+            st.session_state.interests = selected
+            st.session_state.question_data = None
+            st.session_state.answered = False
+            st.session_state.last_result = None
+            st.session_state.show_results = False
+            st.session_state.question_count = 0
+            st.session_state.question_type_sequence = generate_question_sequence()
+            st.session_state.error_message = ""
+            st.session_state.difficulty = 3
+            st.session_state.correct = 0
+            st.session_state.total = 0
+            st.session_state.session_start_time = None
+            # Reset stats
+            st.session_state.correct_ela = 0
+            st.session_state.total_ela = 0
+            st.session_state.time_ela = 0.0
+            st.session_state.correct_math = 0
+            st.session_state.total_math = 0
+            st.session_state.time_math = 0.0
+            st.session_state.question_start_time = None
+            st.session_state.current_subject = None
+            st.session_state.current_domain = None
+            st.session_state.max_difficulty_ela = 3
+            st.session_state.max_difficulty_math = 3
+            st.session_state.used_topics = []
+            st.session_state.domain_correct = {d: 0 for d in ALL_DOMAINS}
+            st.session_state.domain_total = {d: 0 for d in ALL_DOMAINS}
+            with st.spinner("Generating your first question..."):
+                selected_interest = random.choice(st.session_state.interests)
+                if load_new_question(selected_interest):
+                    st.session_state.started = True
+                    st.rerun()
+                else:
+                    st.session_state.error_message = "Could not generate a question. Please try again."
+        else:
+            st.warning("Choose at least one interest to continue.")
 
     if st.session_state.error_message:
         st.error(st.session_state.error_message)
@@ -697,147 +555,9 @@ def update_difficulty(correct, subject=None):
                 st.session_state.max_difficulty_math, current_diff
             )
 
-# --- REPORT RENDERER ---
-def render_report():
-    score = st.session_state.correct
-    total_answered = st.session_state.total
-    is_partial = st.session_state.question_count < TOTAL_QUESTIONS
-
-    score_pct = score / total_answered if total_answered > 0 else 0
-    if score_pct >= 0.9:
-        stars = 5
-    elif score_pct >= 0.8:
-        stars = 4
-    elif score_pct >= 0.65:
-        stars = 3
-    elif score_pct >= 0.5:
-        stars = 2
-    else:
-        stars = 1
-
-    difficulty = st.session_state.difficulty
-    if difficulty <= 2:
-        grade_level = "2nd-3rd Grade"
-        grade_emoji = "📗"
-    elif difficulty <= 4:
-        grade_level = "4th Grade"
-        grade_emoji = "📘"
-    elif difficulty <= 6:
-        grade_level = "5th-6th Grade"
-        grade_emoji = "📙"
-    elif difficulty <= 8:
-        grade_level = "7th Grade"
-        grade_emoji = "📕"
-    else:
-        grade_level = "8th Grade"
-        grade_emoji = "📚"
-
-    student_name = st.session_state.get("student_name", "")
-    session_mode = st.session_state.get("session_mode", "")
-
-    if is_partial:
-        if student_name:
-            st.markdown(f"### 📊 {student_name}'s Progress Report")
-        else:
-            st.markdown("### 📊 Progress Report")
-        st.markdown(f"*Session in progress — {st.session_state.question_count}/{TOTAL_QUESTIONS} questions completed*")
-    else:
-        if student_name:
-            st.markdown(f"### Great job, {student_name}! Session Complete!")
-        else:
-            st.markdown("### Session Complete!")
-
-    if st.session_state.session_start_time:
-        total_elapsed = int(time.time() - st.session_state.session_start_time)
-        mins, secs = divmod(total_elapsed, 60)
-        st.markdown(f"**Time: {mins:02d}:{secs:02d}**")
-
-    st.markdown(f"**Score: {score} / {total_answered}** ({score_pct*100:.0f}%)")
-    st.write("")
-
-    st.markdown(f"## {grade_emoji} Level: **{grade_level}**")
-    st.markdown(f"*(Difficulty reached: Level {difficulty}/10)*")
-    st.write("")
-    st.markdown("**Rating:** " + "⭐" * stars)
-    st.write("---")
-
-    domain_correct = st.session_state.get("domain_correct", {})
-    domain_total = st.session_state.get("domain_total", {})
-
-    ela_correct = st.session_state.correct_ela
-    ela_total = st.session_state.total_ela
-    math_correct = st.session_state.correct_math
-    math_total = st.session_state.total_math
-
-    all_results = []
-
-    if session_mode != "Math":
-        ela_pct = f"{ela_correct/ela_total*100:.0f}%" if ela_total > 0 else "—"
-        st.markdown(f"### 📚 ELA — {ela_correct}/{ela_total} ({ela_pct})")
-        st.write("")
-        for domain in ELA_DOMAINS:
-            d_total = domain_total.get(domain, 0)
-            d_correct = domain_correct.get(domain, 0)
-            if d_total > 0:
-                pct = d_correct / d_total
-                label = "Needs Work" if pct < 0.5 else "Getting There" if pct < 0.75 else "Strong"
-                st.markdown(f"**{domain}** — {d_correct}/{d_total} ({pct*100:.0f}%) _{label}_")
-                st.progress(pct)
-                all_results.append((domain, pct))
-            else:
-                st.markdown(f"**{domain}** — 0/0")
-        st.write("")
-
-    if session_mode != "ELA":
-        math_pct = f"{math_correct/math_total*100:.0f}%" if math_total > 0 else "—"
-        st.markdown(f"### 🔢 Math — {math_correct}/{math_total} ({math_pct})")
-        st.write("")
-        for domain in MATH_DOMAINS:
-            d_total = domain_total.get(domain, 0)
-            d_correct = domain_correct.get(domain, 0)
-            if d_total > 0:
-                pct = d_correct / d_total
-                label = "Needs Work" if pct < 0.5 else "Getting There" if pct < 0.75 else "Strong"
-                st.markdown(f"**{domain}** — {d_correct}/{d_total} ({pct*100:.0f}%) _{label}_")
-                st.progress(pct)
-                all_results.append((domain, pct))
-            else:
-                st.markdown(f"**{domain}** — 0/0")
-        st.write("")
-
-    if all_results:
-        weakest = min(all_results, key=lambda x: x[1])
-        if weakest[1] < 0.75:
-            st.info(f"💪 **Focus Area:** {weakest[0]} ({weakest[1]*100:.0f}%)")
-
-    st.write("")
-
-    if is_partial:
-        col_resume, col_new = st.columns(2)
-        with col_resume:
-            if st.button("▶️ Continue Session", use_container_width=True):
-                st.session_state.show_results = False
-                st.rerun()
-        with col_new:
-            if st.button("🆕 New Session", use_container_width=True):
-                reset_session_state()
-                st.rerun()
-    else:
-        if st.button("Play Again", use_container_width=True):
-            reset_session_state(keep_profile=True)
-            st.session_state.show_mode_selector = True
-            st.rerun()
-
-
 # --- UI ---
 st.markdown("# ⭐ FUN ED")
-student_name = st.session_state.get("student_name", "")
-session_mode = st.session_state.get("session_mode", "")
-mode_label = "📚 Reading" if session_mode == "ELA" else "🔢 Math" if session_mode == "Math" else ""
-if student_name:
-    st.markdown(f"*{student_name}'s {mode_label} session*")
-else:
-    st.markdown(f"*{mode_label} session*")
+st.markdown("*Ediz's adventure-filled learning world*")
 st.write("---")
 
 col1, col2 = st.columns([1, 2.5])
@@ -846,17 +566,20 @@ with col1:
     st.markdown("### Progress")
     st.write("")
 
+    # Progress bar
     q_count = st.session_state.question_count
     st.markdown(f"**{q_count} / {TOTAL_QUESTIONS} questions**")
     st.progress(q_count / TOTAL_QUESTIONS if TOTAL_QUESTIONS > 0 else 0)
     st.write("")
 
+    # Elapsed time
     if st.session_state.session_start_time:
         elapsed = int(time.time() - st.session_state.session_start_time)
         mins, secs = divmod(elapsed, 60)
         st.markdown(f"**Time: {mins:02d}:{secs:02d}**")
         st.write("")
 
+    # Difficulty
     st.markdown("<div class='diff-label'>Difficulty Level</div>", unsafe_allow_html=True)
     st.progress(st.session_state.difficulty / 10)
     st.markdown(f"**Level {st.session_state.difficulty}/10**")
@@ -865,23 +588,177 @@ with col1:
     st.write("")
 
     if not st.session_state.show_results:
-        if st.session_state.total > 0:
-            if st.button("📊 View Report", use_container_width=True):
-                st.session_state.show_results = True
-                st.session_state.question_data = None
-                st.session_state.answered = False
-                st.session_state.last_result = None
-                st.rerun()
         if st.button("🔄 Reset Session", use_container_width=True):
-            reset_session_state()
+            st.session_state.difficulty = 3
+            st.session_state.correct = 0
+            st.session_state.total = 0
+            st.session_state.question_count = 0
+            st.session_state.question_type_sequence = generate_question_sequence()
+            st.session_state.question_data = None
+            st.session_state.answered = False
+            st.session_state.last_result = None
+            st.session_state.show_results = False
+            st.session_state.interests = []
+            st.session_state.started = False
+            st.session_state.session_start_time = None
+            st.session_state.correct_ela = 0
+            st.session_state.total_ela = 0
+            st.session_state.time_ela = 0.0
+            st.session_state.correct_math = 0
+            st.session_state.total_math = 0
+            st.session_state.time_math = 0.0
+            st.session_state.question_start_time = None
+            st.session_state.current_subject = None
+            st.session_state.current_domain = None
+            st.session_state.max_difficulty_ela = 3
+            st.session_state.max_difficulty_math = 3
+            st.session_state.used_topics = []
+            st.session_state.domain_correct = {d: 0 for d in ALL_DOMAINS}
+            st.session_state.domain_total = {d: 0 for d in ALL_DOMAINS}
             st.rerun()
 
 with col2:
     if st.session_state.show_results:
-        render_report()
+        score = st.session_state.correct
+        if score >= 37:
+            stars = 5
+        elif score >= 32:
+            stars = 4
+        elif score >= 27:
+            stars = 3
+        elif score >= 20:
+            stars = 2
+        else:
+            stars = 1
+
+        # Convert difficulty level to grade level
+        difficulty = st.session_state.difficulty
+        if difficulty <= 2:
+            grade_level = "2nd-3rd Grade"
+            grade_emoji = "📗"
+        elif difficulty <= 4:
+            grade_level = "4th Grade"
+            grade_emoji = "📘"
+        elif difficulty <= 6:
+            grade_level = "5th-6th Grade"
+            grade_emoji = "📙"
+        elif difficulty <= 8:
+            grade_level = "7th Grade"
+            grade_emoji = "📕"
+        else:  # 9-10
+            grade_level = "8th Grade"
+            grade_emoji = "📚"
+
+        student_name = st.session_state.get("student_name", "")
+
+        # Header
+        if student_name:
+            st.markdown(f"### Great job, {student_name}! Session Complete!")
+        else:
+            st.markdown(f"### Session Complete!")
+
+        # Elapsed time
+        if st.session_state.session_start_time:
+            total_elapsed = int(time.time() - st.session_state.session_start_time)
+            mins, secs = divmod(total_elapsed, 60)
+            st.markdown(f"**Total Time: {mins:02d}:{secs:02d}**")
+
+        st.markdown(f"**Score: {score} / {TOTAL_QUESTIONS}**")
+        st.write("")
+
+        st.markdown(f"## {grade_emoji} Level: **{grade_level}**")
+        st.markdown(f"*(Difficulty reached: Level {difficulty}/10)*")
+        st.write("")
+        st.markdown("**Rating:** " + "⭐" * stars)
+        st.write("---")
+
+        domain_correct = st.session_state.get("domain_correct", {})
+        domain_total = st.session_state.get("domain_total", {})
+
+        ela_correct = st.session_state.correct_ela
+        ela_total = st.session_state.total_ela
+        math_correct = st.session_state.correct_math
+        math_total = st.session_state.total_math
+
+        # ELA section
+        ela_pct = f"{ela_correct/ela_total*100:.0f}%" if ela_total > 0 else "—"
+        st.markdown(f"### 📚 ELA — {ela_correct}/{ela_total} ({ela_pct})")
+        st.write("")
+        ela_results = []
+        for domain in ELA_DOMAINS:
+            d_total = domain_total.get(domain, 0)
+            d_correct = domain_correct.get(domain, 0)
+            if d_total > 0:
+                pct = d_correct / d_total
+                label = "Needs Work" if pct < 0.5 else "Getting There" if pct < 0.75 else "Strong"
+                st.markdown(f"**{domain}** — {d_correct}/{d_total} ({pct*100:.0f}%) _{label}_")
+                st.progress(pct)
+                ela_results.append((domain, pct))
+            else:
+                st.markdown(f"**{domain}** — 0/0")
+        st.write("")
+
+        # Math section
+        math_pct = f"{math_correct/math_total*100:.0f}%" if math_total > 0 else "—"
+        st.markdown(f"### 🔢 Math — {math_correct}/{math_total} ({math_pct})")
+        st.write("")
+        math_results = []
+        for domain in MATH_DOMAINS:
+            d_total = domain_total.get(domain, 0)
+            d_correct = domain_correct.get(domain, 0)
+            if d_total > 0:
+                pct = d_correct / d_total
+                label = "Needs Work" if pct < 0.5 else "Getting There" if pct < 0.75 else "Strong"
+                st.markdown(f"**{domain}** — {d_correct}/{d_total} ({pct*100:.0f}%) _{label}_")
+                st.progress(pct)
+                math_results.append((domain, pct))
+            else:
+                st.markdown(f"**{domain}** — 0/0")
+        st.write("")
+
+        # Weakest areas
+        all_results = ela_results + math_results
+        if all_results:
+            weakest = min(all_results, key=lambda x: x[1])
+            if weakest[1] < 0.75:
+                st.info(f"💪 **Focus Area:** {weakest[0]} ({weakest[1]*100:.0f}%)")
+
+        st.write("")
+        if st.button("Play Again", use_container_width=True):
+            st.session_state.correct = 0
+            st.session_state.total = 0
+            st.session_state.difficulty = 3
+            st.session_state.question_count = 0
+            st.session_state.question_type_sequence = generate_question_sequence()
+            st.session_state.question_data = None
+            st.session_state.answered = False
+            st.session_state.last_result = None
+            st.session_state.show_results = False
+            st.session_state.session_start_time = None
+            st.session_state.correct_ela = 0
+            st.session_state.total_ela = 0
+            st.session_state.time_ela = 0.0
+            st.session_state.correct_math = 0
+            st.session_state.total_math = 0
+            st.session_state.time_math = 0.0
+            st.session_state.question_start_time = None
+            st.session_state.current_subject = None
+            st.session_state.current_domain = None
+            st.session_state.max_difficulty_ela = 3
+            st.session_state.max_difficulty_math = 3
+            st.session_state.used_topics = []
+            st.session_state.domain_correct = {d: 0 for d in ALL_DOMAINS}
+            st.session_state.domain_total = {d: 0 for d in ALL_DOMAINS}
+            st.session_state.started = True
+            selected_interest = random.choice(st.session_state.interests)
+            if load_new_question(selected_interest):
+                st.rerun()
+            else:
+                st.error("Could not generate question. Try again.")
     elif st.session_state.question_data:
         q = st.session_state.question_data
 
+        # Show current subject and domain
         subject = st.session_state.current_subject or ""
         domain = st.session_state.current_domain or ""
         type_icon = "📚" if subject == "ELA" else "🔢"
@@ -889,6 +766,7 @@ with col2:
         st.write("")
         st.markdown(f"<div class='passage-box'>{q['passage']}</div>", unsafe_allow_html=True)
 
+        # Display vocabulary if available
         if "vocabulary" in q and q["vocabulary"]:
             st.write("")
             with st.expander("📖 Vocabulary", expanded=False):
@@ -913,10 +791,12 @@ with col2:
                     st.session_state.answered = True
                     st.session_state.total += 1
 
+                    # Calculate time spent on this question
                     elapsed_time = 0.0
                     if st.session_state.question_start_time:
                         elapsed_time = time.time() - st.session_state.question_start_time
 
+                    # Update stats
                     subj = st.session_state.current_subject
                     dom = st.session_state.current_domain
                     is_correct = (letter == q["answer"])
@@ -932,6 +812,7 @@ with col2:
                         if is_correct:
                             st.session_state.correct_math += 1
 
+                    # Domain tracking
                     if dom and dom in st.session_state.domain_total:
                         st.session_state.domain_total[dom] += 1
                         if is_correct:
@@ -944,9 +825,6 @@ with col2:
                     else:
                         update_difficulty(False, subj)
                         st.session_state.last_result = ("wrong", letter, q)
-
-                    # Save progress after every answer
-                    save_progress_snapshot()
                     st.rerun()
 
         if st.session_state.answered:
@@ -958,14 +836,17 @@ with col2:
                     st.session_state.last_result = None
                     st.rerun()
                 else:
+                    # Load new question FIRST, then clear state if successful
                     with st.spinner("Loading the next question..."):
                         selected_interest = random.choice(st.session_state.interests)
                         if load_new_question(selected_interest):
+                            # Only clear state after successful load
                             st.session_state.answered = False
                             st.session_state.last_result = None
                             st.rerun()
                         else:
                             st.error("Could not generate question. Please try again.")
+                            # Keep current question_data so user doesn't see onboarding
 
         if st.session_state.last_result:
             result, chosen, q = st.session_state.last_result
