@@ -7,7 +7,7 @@ import json
 import traceback
 
 # --- VERSION ---
-VERSION = "2.4"  # May 5, 2026 - Difficulty range clamped to Level 3-7
+VERSION = "2.3"  # May 5, 2026 - MAP Growth: single mixed session, 40Q (20 ELA + 20 Math)
 
 # --- API KEY ---
 
@@ -540,9 +540,9 @@ if not st.session_state.started:
 # --- ADAPTIVE ENGINE ---
 def update_difficulty(correct, subject=None):
     if correct:
-        st.session_state.difficulty = min(7, st.session_state.difficulty + 1)
+        st.session_state.difficulty = min(10, st.session_state.difficulty + 1)
     else:
-        st.session_state.difficulty = max(3, st.session_state.difficulty - 1)
+        st.session_state.difficulty = max(1, st.session_state.difficulty - 1)
 
     if subject:
         current_diff = st.session_state.difficulty
