@@ -7,7 +7,7 @@ import json
 import traceback
 
 # --- VERSION ---
-VERSION = "2.5"  # May 5, 2026 - Add optional reading strategy hint per question
+VERSION = "2.4"  # May 5, 2026 - Difficulty range clamped to Level 3-7
 
 # --- API KEY ---
 
@@ -765,24 +765,6 @@ with col2:
         st.markdown(f"**{type_icon} {domain}** — Question {st.session_state.question_count}/{TOTAL_QUESTIONS}")
         st.write("")
         st.markdown(f"<div class='passage-box'>{q['passage']}</div>", unsafe_allow_html=True)
-
-        # Strategy hint
-        HINTS = {
-            "Reading Comprehension":    "Tip: Check the first and last sentences of the passage.",
-            "Main Idea / Central Theme": "Tip: Check the first and last sentences of the passage.",
-            "Vocabulary in Context":    "Tip: Find the word in the passage and read the sentences around it.",
-            "Literary Analysis":        "Tip: Look for what the character does or says, not just thinks.",
-            "Text Structure":           "Tip: Look for signal words like 'because', 'however', 'first', 'finally'.",
-            "Argument & Evidence":      "Tip: Find the author's main claim first, then look for supporting details.",
-            "Ratios & Proportions":     "Tip: Read the problem twice before calculating.",
-            "Fractions & Decimals":     "Tip: Read the problem twice before calculating.",
-            "Expressions & Equations":  "Tip: Read the problem twice before calculating.",
-            "Geometry":                 "Tip: Read the problem twice before calculating.",
-            "Statistics & Data":        "Tip: Read the problem twice before calculating.",
-        }
-        hint = HINTS.get(domain, "Tip: Read the question carefully before choosing an answer.")
-        with st.expander("💡 Hint", expanded=False):
-            st.markdown(hint)
 
         # Display vocabulary if available
         if "vocabulary" in q and q["vocabulary"]:
