@@ -206,8 +206,6 @@ if "pronoun" not in st.session_state:
     st.session_state.pronoun = ""
 if "session_mode" not in st.session_state:
     st.session_state.session_mode = ""  # "ELA" or "Math"
-if "show_mode_selector" not in st.session_state:
-    st.session_state.show_mode_selector = False
 if "dismissed_snapshot" not in st.session_state:
     st.session_state.dismissed_snapshot = False
 
@@ -556,7 +554,6 @@ def reset_session_state(keep_profile=False):
         st.session_state.student_name = ""
         st.session_state.pronoun = ""
         st.session_state.session_mode = ""
-        st.session_state.show_mode_selector = False
     clear_progress_snapshot()
 
 
@@ -591,18 +588,15 @@ if not st.session_state.started:
                 st.rerun()
         st.stop()
 
-    # Session mode selector (shown after onboarding form is submitted)
-    if st.session_state.show_mode_selector:
-        student_name = st.session_state.get("student_name", "")
-        if student_name:
-            st.markdown(f"### Hi {student_name}! Choose your session:")
-        else:
-            st.markdown("### Choose your session:")
+    # If profile is filled, show session type selector (no extra flag needed)
+    if st.session_state.student_name and st.session_state.interests:
+        student_name = st.session_state.student_name
+        st.markdown(f"### Hi {student_name}! Choose your session:")
         st.write("")
         col_ela, col_math = st.columns(2)
         with col_ela:
             st.markdown("#### 📚 Reading")
-            st.markdown("20 ELA questions — comprehension, vocabulary, literary analysis")
+            st.markdown("20 questions — comprehension, vocabulary, literary analysis")
             if st.button("Start Reading Session", use_container_width=True, key="btn_ela"):
                 st.session_state.session_mode = "ELA"
                 st.session_state.question_type_sequence = generate_question_sequence("ELA")
@@ -610,14 +604,12 @@ if not st.session_state.started:
                     selected_interest = random.choice(st.session_state.interests)
                     if load_new_question(selected_interest):
                         st.session_state.started = True
-                        st.session_state.show_mode_selector = False
-                        st.session_state.dismissed_snapshot = False
                         st.rerun()
                     else:
                         st.error("Could not generate a question. Please try again.")
         with col_math:
             st.markdown("#### 🔢 Math")
-            st.markdown("20 Math questions — ratios, fractions, equations, geometry")
+            st.markdown("20 questions — ratios, fractions, equations, geometry")
             if st.button("Start Math Session", use_container_width=True, key="btn_math"):
                 st.session_state.session_mode = "Math"
                 st.session_state.question_type_sequence = generate_question_sequence("Math")
@@ -625,11 +617,14 @@ if not st.session_state.started:
                     selected_interest = random.choice(st.session_state.interests)
                     if load_new_question(selected_interest):
                         st.session_state.started = True
-                        st.session_state.show_mode_selector = False
-                        st.session_state.dismissed_snapshot = False
                         st.rerun()
                     else:
                         st.error("Could not generate a question. Please try again.")
+        st.write("")
+        if st.button("← Back", key="btn_back"):
+            st.session_state.student_name = ""
+            st.session_state.interests = []
+            st.rerun()
         st.stop()
 
     # Onboarding form
@@ -652,7 +647,7 @@ if not st.session_state.started:
             "Gaming": st.checkbox("Gaming", key="interest_gaming"),
         }
         st.write("")
-        start_pressed = st.form_submit_button("Let's Go!", use_container_width=True)
+        start_pressed = st.form_submit_button("Next →", use_container_width=True)
 
     if start_pressed:
         selected = [name for name, value in likes.items() if value]
@@ -671,7 +666,6 @@ if not st.session_state.started:
         st.session_state.pronoun = "he/him" if gender == "Boy" else "she/her"
         st.session_state.interests = selected
         reset_session_state(keep_profile=True)
-        st.session_state.show_mode_selector = True
         st.rerun()
 
     if st.session_state.error_message:
@@ -825,7 +819,8 @@ def render_report():
     else:
         if st.button("Play Again", use_container_width=True):
             reset_session_state(keep_profile=True)
-            st.session_state.show_mode_selector = True
+            # session_mode cleared so mode selector shows (name/interests kept)
+            st.session_state.session_mode = ""
             st.rerun()
 
 
