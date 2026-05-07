@@ -7,7 +7,7 @@ import json
 import traceback
 
 # --- VERSION ---
-VERSION = "2.8"  # May 7, 2026 - Practice Mode (interests) vs Test Mode (academic topics)
+VERSION = "2.7"  # May 6, 2026 - Session selector (Reading/Math), continuous save, View Report button
 
 # --- PROGRESS FILE ---
 PROGRESS_FILE = "session_progress.json"
@@ -61,26 +61,6 @@ MATH_DOMAINS = {
 ALL_DOMAINS = list(ELA_DOMAINS.keys()) + list(MATH_DOMAINS.keys())
 
 TOTAL_QUESTIONS = 20
-
-ELA_TEST_TOPICS = [
-    "ancient Egyptian civilization", "the water cycle", "photosynthesis",
-    "the American Revolution", "ocean ecosystems", "volcanic eruptions",
-    "animal migration patterns", "the human immune system", "space exploration",
-    "rainforest biodiversity", "the Industrial Revolution", "Arctic wildlife",
-    "plate tectonics", "the life cycle of stars", "coral reef ecosystems",
-    "medieval castles and knights", "the digestive system", "weather patterns",
-    "endangered species conservation", "ancient Greek democracy",
-    "the Civil Rights Movement", "deep-sea creatures", "the water treatment process",
-    "how bridges are built", "the history of flight",
-]
-
-MATH_TEST_TOPICS = [
-    "a school fundraiser", "a community garden project", "a science fair exhibit",
-    "a city bus schedule", "a library book collection", "a school store",
-    "a weather station", "a recycling program", "a school cafeteria",
-    "a nature park trail", "a museum exhibit", "a school athletics program",
-    "a bake sale", "a town swimming pool", "a school newspaper",
-]
 
 DIFFICULTY_MAP = {
     1:  "very simple, 2nd grade reading level, short sentences",
@@ -146,7 +126,6 @@ def save_progress_snapshot():
     data = {
         "student_name": st.session_state.get("student_name", ""),
         "session_mode": st.session_state.get("session_mode", ""),
-        "question_mode": st.session_state.get("question_mode", ""),
         "interests": st.session_state.get("interests", []),
         "question_count": st.session_state.get("question_count", 0),
         "correct": st.session_state.get("correct", 0),
@@ -190,7 +169,6 @@ def clear_progress_snapshot():
 def restore_snapshot_to_state(snap):
     st.session_state.student_name = snap.get("student_name", "")
     st.session_state.session_mode = snap.get("session_mode", "")
-    st.session_state.question_mode = snap.get("question_mode", "")
     st.session_state.interests = snap.get("interests", [])
     st.session_state.question_count = snap.get("question_count", 0)
     st.session_state.correct = snap.get("correct", 0)
@@ -228,8 +206,6 @@ if "pronoun" not in st.session_state:
     st.session_state.pronoun = ""
 if "session_mode" not in st.session_state:
     st.session_state.session_mode = ""  # "ELA" or "Math"
-if "question_mode" not in st.session_state:
-    st.session_state.question_mode = ""  # "practice" or "test"
 if "dismissed_snapshot" not in st.session_state:
     st.session_state.dismissed_snapshot = False
 
@@ -299,7 +275,7 @@ if "domain_total" not in st.session_state:
     st.session_state.domain_total = {d: 0 for d in ALL_DOMAINS}
 
 # --- PROMPT ENGINE ---
-def build_reading_prompt(interest, difficulty, domain, student_name="", pronoun="", mode="practice"):
+def build_reading_prompt(interest, difficulty, domain, student_name="", pronoun=""):
     level_desc = DIFFICULTY_MAP[difficulty]
     correct_answer = random.choice(["A", "B", "C", "D"])
 
@@ -318,13 +294,6 @@ def build_reading_prompt(interest, difficulty, domain, student_name="", pronoun=
     else:
         word_count = "160 to 200 words"
         sentence_complexity = "Use sophisticated sentence structures with embedded clauses and varied syntax."
-
-    if mode == "test":
-        topic = random.choice(ELA_TEST_TOPICS)
-        name_override = ""
-    else:
-        topic = interest
-        name_override = f"The protagonist must be named {student_name} and use {pronoun} pronouns." if student_name else ""
 
     used_topics = st.session_state.get("used_topics", [])[-6:]
     if used_topics:
@@ -372,12 +341,14 @@ def build_reading_prompt(interest, difficulty, domain, student_name="", pronoun=
 
     guidance = domain_guidance.get(domain, "Write a passage and ask a comprehension question.")
 
+    name_instruction = f"The protagonist must be named {student_name} and use {pronoun} pronouns." if student_name else ""
+
     return f"""You are generating a 6th grade STAR Reading comprehension question.
 
 Domain: {domain}
 Difficulty: {level_desc}
-Topic: Use {topic} as the real-world context for the passage. Make it engaging.{topic_restriction}
-{name_override}
+Topic: Use {interest} as the real-world context for the passage. Make it engaging.{topic_restriction}
+{name_instruction}
 
 Passage requirements:
 - Length: {word_count}
@@ -413,7 +384,7 @@ Return ONLY valid JSON, no extra text:
 IMPORTANT: correct answer must be in choice {correct_answer}."""
 
 
-def build_math_prompt(interest, difficulty, domain, mode="practice"):
+def build_math_prompt(interest, difficulty, domain):
     level_desc = DIFFICULTY_MAP[difficulty]
     correct_answer = random.choice(["A", "B", "C", "D"])
 
@@ -430,18 +401,17 @@ def build_math_prompt(interest, difficulty, domain, mode="practice"):
     }
 
     guidance = domain_guidance.get(domain, "general math problem")
-    context = random.choice(MATH_TEST_TOPICS) if mode == "test" else interest
 
     return f"""You are generating a 6th grade STAR Math word problem.
 
 Domain: {domain}
 Topic: {guidance}
 Difficulty: {level_desc}
-Context: Use {context} as the real-world scenario.
+Context: Use {interest} as the real-world scenario.
 The correct answer MUST be choice {correct_answer}.
 
 Requirements:
-- Write a word problem (2-4 sentences) using {context} as context
+- Write a word problem (2-4 sentences) using {interest} as context
 - Test specifically: {guidance}
 - All 4 answer choices must be plausible numbers (close to each other, no obviously wrong answers)
 - Only choice {correct_answer} is correct
@@ -498,13 +468,12 @@ def generate_question(interest, domain, subject, difficulty, question_number):
     if client is None:
         return None
 
-    mode = st.session_state.get("question_mode", "practice")
     if subject == "Math":
-        prompt = build_math_prompt(interest, difficulty, domain, mode)
+        prompt = build_math_prompt(interest, difficulty, domain)
     else:
         student_name = st.session_state.get("student_name", "")
         pronoun = st.session_state.get("pronoun", "")
-        prompt = build_reading_prompt(interest, difficulty, domain, student_name, pronoun, mode)
+        prompt = build_reading_prompt(interest, difficulty, domain, student_name, pronoun)
     for model_name in MODELS:
         for attempt in range(3):
             try:
@@ -585,10 +554,6 @@ def reset_session_state(keep_profile=False):
         st.session_state.student_name = ""
         st.session_state.pronoun = ""
         st.session_state.session_mode = ""
-        st.session_state.question_mode = ""
-    else:
-        st.session_state.session_mode = ""
-        st.session_state.question_mode = ""
     clear_progress_snapshot()
 
 
@@ -623,8 +588,8 @@ if not st.session_state.started:
                 st.rerun()
         st.stop()
 
-    # Step 2: Subject selector (profile filled, no subject yet)
-    if st.session_state.student_name and st.session_state.interests and not st.session_state.session_mode:
+    # If profile is filled, show session type selector (no extra flag needed)
+    if st.session_state.student_name and st.session_state.interests:
         student_name = st.session_state.student_name
         st.markdown(f"### Hi {student_name}! Choose your session:")
         st.write("")
@@ -632,57 +597,33 @@ if not st.session_state.started:
         with col_ela:
             st.markdown("#### 📚 Reading")
             st.markdown("20 questions — comprehension, vocabulary, literary analysis")
-            if st.button("Reading", use_container_width=True, key="btn_ela"):
+            if st.button("Start Reading Session", use_container_width=True, key="btn_ela"):
                 st.session_state.session_mode = "ELA"
                 st.session_state.question_type_sequence = generate_question_sequence("ELA")
-                st.rerun()
+                with st.spinner("Generating your first question..."):
+                    selected_interest = random.choice(st.session_state.interests)
+                    if load_new_question(selected_interest):
+                        st.session_state.started = True
+                        st.rerun()
+                    else:
+                        st.error("Could not generate a question. Please try again.")
         with col_math:
             st.markdown("#### 🔢 Math")
             st.markdown("20 questions — ratios, fractions, equations, geometry")
-            if st.button("Math", use_container_width=True, key="btn_math"):
+            if st.button("Start Math Session", use_container_width=True, key="btn_math"):
                 st.session_state.session_mode = "Math"
                 st.session_state.question_type_sequence = generate_question_sequence("Math")
-                st.rerun()
+                with st.spinner("Generating your first question..."):
+                    selected_interest = random.choice(st.session_state.interests)
+                    if load_new_question(selected_interest):
+                        st.session_state.started = True
+                        st.rerun()
+                    else:
+                        st.error("Could not generate a question. Please try again.")
         st.write("")
-        if st.button("← Back", key="btn_back_subj"):
+        if st.button("← Back", key="btn_back"):
             st.session_state.student_name = ""
             st.session_state.interests = []
-            st.rerun()
-        st.stop()
-
-    # Step 3: Mode selector (subject chosen, no mode yet)
-    if st.session_state.student_name and st.session_state.interests and st.session_state.session_mode and not st.session_state.question_mode:
-        subj_label = "📚 Reading" if st.session_state.session_mode == "ELA" else "🔢 Math"
-        st.markdown(f"### {subj_label} — Choose your mode:")
-        st.write("")
-        col_prac, col_test = st.columns(2)
-        with col_prac:
-            st.markdown("#### 🎮 Practice Mode")
-            st.markdown("Passages and problems use **your interests** as topics (Minecraft, Soccer, etc.)")
-            if st.button("Practice Mode", use_container_width=True, key="btn_practice"):
-                st.session_state.question_mode = "practice"
-                with st.spinner("Generating your first question..."):
-                    selected_interest = random.choice(st.session_state.interests)
-                    if load_new_question(selected_interest):
-                        st.session_state.started = True
-                        st.rerun()
-                    else:
-                        st.error("Could not generate a question. Please try again.")
-        with col_test:
-            st.markdown("#### 📝 Test Mode")
-            st.markdown("**Real Test Simulation** — Academic topics only (history, science, nature). No personal interests.")
-            if st.button("Test Mode", use_container_width=True, key="btn_test"):
-                st.session_state.question_mode = "test"
-                with st.spinner("Generating your first question..."):
-                    selected_interest = random.choice(st.session_state.interests)
-                    if load_new_question(selected_interest):
-                        st.session_state.started = True
-                        st.rerun()
-                    else:
-                        st.error("Could not generate a question. Please try again.")
-        st.write("")
-        if st.button("← Back", key="btn_back_mode"):
-            st.session_state.session_mode = ""
             st.rerun()
         st.stop()
 
@@ -787,22 +728,18 @@ def render_report():
 
     student_name = st.session_state.get("student_name", "")
     session_mode = st.session_state.get("session_mode", "")
-    question_mode = st.session_state.get("question_mode", "")
-    subj_label = "📚 Reading" if session_mode == "ELA" else "🔢 Math" if session_mode == "Math" else ""
-    mode_label = "🎮 Practice Mode" if question_mode == "practice" else "📝 Test Mode" if question_mode == "test" else ""
 
     if is_partial:
         if student_name:
             st.markdown(f"### 📊 {student_name}'s Progress Report")
         else:
             st.markdown("### 📊 Progress Report")
-        st.markdown(f"*{subj_label} · {mode_label} — {st.session_state.question_count}/{TOTAL_QUESTIONS} questions completed*")
+        st.markdown(f"*Session in progress — {st.session_state.question_count}/{TOTAL_QUESTIONS} questions completed*")
     else:
         if student_name:
             st.markdown(f"### Great job, {student_name}! Session Complete!")
         else:
             st.markdown("### Session Complete!")
-        st.markdown(f"*{subj_label} · {mode_label}*")
 
     if st.session_state.session_start_time:
         total_elapsed = int(time.time() - st.session_state.session_start_time)
@@ -882,6 +819,8 @@ def render_report():
     else:
         if st.button("Play Again", use_container_width=True):
             reset_session_state(keep_profile=True)
+            # session_mode cleared so mode selector shows (name/interests kept)
+            st.session_state.session_mode = ""
             st.rerun()
 
 
@@ -889,14 +828,11 @@ def render_report():
 st.markdown("# ⭐ FUN ED")
 student_name = st.session_state.get("student_name", "")
 session_mode = st.session_state.get("session_mode", "")
-question_mode = st.session_state.get("question_mode", "")
-subj_label = "📚 Reading" if session_mode == "ELA" else "🔢 Math" if session_mode == "Math" else ""
-mode_icon = "🎮 Practice" if question_mode == "practice" else "📝 Test" if question_mode == "test" else ""
-subtitle = f"{subj_label} · {mode_icon}" if subj_label and mode_icon else subj_label or mode_icon
+mode_label = "📚 Reading" if session_mode == "ELA" else "🔢 Math" if session_mode == "Math" else ""
 if student_name:
-    st.markdown(f"*{student_name} — {subtitle}*")
+    st.markdown(f"*{student_name}'s {mode_label} session*")
 else:
-    st.markdown(f"*{subtitle}*")
+    st.markdown(f"*{mode_label} session*")
 st.write("---")
 
 col1, col2 = st.columns([1, 2.5])
